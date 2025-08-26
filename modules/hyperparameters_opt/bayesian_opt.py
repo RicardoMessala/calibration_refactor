@@ -41,7 +41,7 @@ class BayesianOptimization:
         
         # Instancia o wrapper selecionado, passando os dados de validação
         print(f"Wrapper para o modelo '{model_type}' selecionado.")
-        return wrapper_class(self.X_test, self.y_test)
+        return wrapper_class(self.X_train, self.y_train, self.X_test, self.y_test)
     
     def set_parameters():
         pass
@@ -50,8 +50,8 @@ class BayesianOptimization:
         @use_named_args(self.space)
         def objective(**params):
             all_params = {**params, **self.fixed_params}
-            model = self.model_wrapper.train(self.X_train, self.y_train, **all_params)
-            y_pred = self.model_wrapper.predict(model, self.X_test)
+            model = self.model_wrapper.train(**all_params)
+            y_pred = self.model_wrapper.predict(model)
             score = mean_absolute_error(self.y_test, y_pred)
             return score
         return objective

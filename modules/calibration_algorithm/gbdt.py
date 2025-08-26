@@ -25,7 +25,10 @@ class GBDTTrainning:
         return predictions
 
 class XGBoostTraining: # Treinador para XGBoost
-    def __init__(self, params, stopping_rounds=10):
+    def __init__(self, params, stopping_rounds=10, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+            
         self.params = params
         self.stopping_rounds = stopping_rounds
 
