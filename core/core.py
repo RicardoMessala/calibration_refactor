@@ -1,4 +1,4 @@
-from modules.calibration_algorithm.algorithm_interface import AlgorithmFactory
+from modules.calibration_algorithm.interface import AlgorithmFactory
 import numpy as np
 
 vetor_de_matrizes = np.array([

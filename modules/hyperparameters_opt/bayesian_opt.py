@@ -1,5 +1,5 @@
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-from modules.adapter.src import LGBMWrapper, XGBoostWrapper
+from modules.wrappers.core import LGBMWrapper, XGBoostWrapper
 from skopt import gp_minimize
 from skopt.utils import use_named_args
 import numpy as np
@@ -42,7 +42,10 @@ class BayesianOptimization:
         # Instancia o wrapper selecionado, passando os dados de validação
         print(f"Wrapper para o modelo '{model_type}' selecionado.")
         return wrapper_class(self.X_test, self.y_test)
- 
+    
+    def set_parameters():
+        pass
+
     def _create_objective_func(self):
         @use_named_args(self.space)
         def objective(**params):

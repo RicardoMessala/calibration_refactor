@@ -1,4 +1,4 @@
-from modules.calibration_algorithm.gbdt.gbdt_trainning import GBDTTrainning, XGBoostTraining
+from modules.calibration_algorithm.gbdt import GBDTTrainning, XGBoostTraining
 
 class LGBMWrapper: # Wrapper para LightGBM
     def __init__(self, X_test, y_test):
