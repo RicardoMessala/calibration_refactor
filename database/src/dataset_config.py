@@ -120,7 +120,6 @@ def split_dataframe(data, params):
                 print ('intervals[0]: ', intervals[0], 'intervals[1]: ', intervals[1])
                 print('TESTANDO')
                 masks.append(make_mask(data_remaining[col_name], intervals))
-                print('masks: ', masks)
 
         # Usa NumPy para combinar as máscaras (mais rápido que reduce com pandas)
         if masks:
@@ -141,51 +140,62 @@ def split_dataframe(data, params):
     return result_list
     
 def make_mask(column, values):
-    print('values no metodo make_mask', values)
-    
-
+    print('NEW COLUMNS')
     """
-    Create a boolean mask from a pandas Series based on either discrete values
-    or an interval [min, max].
+    Cria uma máscara booleana a partir de uma pandas Series com base em valores
+    discretos ou em um intervalo [min, max].
 
     Parameters
     ----------
     column : pandas.Series
-        Column from which the mask will be created.
+        Coluna a partir da qual a máscara será criada.
     values : list, tuple, set, pandas.Series, numpy.ndarray
-        - If it contains multiple discrete values, rows matching those values are selected.
-        - If it has exactly two elements [min, max]:
-            * Both defined   -> select values >= min and < max
-            * Only min       -> select values >= min
-            * Only max       -> select values < max
-            * Both None      -> select all values
+        - Se contiver múltiplos valores discretos, seleciona as linhas que
+          correspondem a esses valores.
+        - Se tiver exatamente dois elementos [min, max]:
+            * Ambos definidos   -> seleciona valores >= min e < max
+            * Apenas min        -> seleciona valores >= min
+            * Apenas max        -> seleciona valores < max
+            * Ambos None        -> seleciona todos os valores
 
     Returns
     -------
     numpy.ndarray
-        Boolean mask array.
+        Array de máscara booleana.
     """
-    # Ensure values is iterable
-    if not isinstance(values, (list, tuple, set, pd.Series, np.ndarray)):
-        print('values no metodo make_mask', values)
-        values = [values]
+    # Garante que 'values' seja um tipo de lista para verificação de tamanho
+    values = list(values)
 
-    # Case: interval [min, max]
+    # Caso: intervalo [min, max]
     if len(values) == 2 and all(isinstance(v, (int, float, type(None))) for v in values):
         min_val, max_val = values
-        print('min val: ', min_val)
-        print('max val: ', max_val)
+
+        # --- INÍCIO DA MODIFICAÇÃO SOLICITADA ---
+        # Define a coluna a ser usada para comparação.
+        # Se o nome da coluna for 'cluster_eta', usa seu valor absoluto.
+        if column.name == 'cluster_eta':
+            print(f"INFO: Aplicando comparação com módulo para a coluna '{column.name}'.")
+            target_column = column.abs()
+        else:
+            target_column = column
+        # --- FIM DA MODIFICAÇÃO SOLICITADA ---
 
         if min_val is not None and max_val is not None:
-            mask = (column >= min_val) & (column < max_val)
-        elif min_val is not None:  # only min defined
-            mask = column >= min_val
-        elif max_val is not None:  # only max defined
-            mask = column < max_val
-        else:  # both None -> all True
-            pass
+            mask = (target_column >= min_val) & (target_column < max_val)
+        elif min_val is not None:  # apenas min definido
+            mask = target_column >= min_val
+        elif max_val is not None:  # apenas max definido
+            mask = target_column < max_val
+        else:  # ambos None -> seleciona tudo
+            mask = pd.Series(True, index=column.index)
+    
+    # Caso: valores discretos
     else:
-        # Case: list of discrete values
         mask = column.isin(values)
 
     return mask.to_numpy()
+
+def setup_params(params):
+    
+    
+    return params
