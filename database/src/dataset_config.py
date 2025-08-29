@@ -1,15 +1,16 @@
 import sklearn
 import pandas as pd
+import numpy as np
 import sklearn.model_selection
 from database.src import dataset_preprocessing
 from database.connection import sql_connection
 
-# External caching of data
-_relevant_data_cache = sql_connection.get_relevant_data()
-_quarterrings_data_cache = sql_connection.get_quarter_rings_data()
-_stdrings_data_cache = sql_connection.get_standard_rings_data()
-_quarterrings_relevant_cache = sql_connection.set_quarter_rings_data()
-_stdrings_relevant_cache = sql_connection.set_standard_rings_data()
+# # External caching of data
+# _relevant_data_cache = sql_connection.get_relevant_data()
+# _quarterrings_data_cache = sql_connection.get_quarter_rings_data()
+# _stdrings_data_cache = sql_connection.get_standard_rings_data()
+# _quarterrings_relevant_cache = sql_connection.set_quarter_rings_data()
+# _stdrings_relevant_cache = sql_connection.set_standard_rings_data()
 
 class CreateInput:
 
@@ -21,11 +22,11 @@ class CreateInput:
                     stdrings_relevant_dataframe=None):
 
         # Initialize data attributes
-        self.dataframe_relevant_data = dataframe_relevant_data or _relevant_data_cache
-        self.quarterrings_dataframe = quarterrings_dataframe or _quarterrings_data_cache
-        self.stdrings_dataframe = stdrings_dataframe or _stdrings_data_cache
-        self.quarterrings_relevant_dataframe = quarterrings_relevant_dataframe or _quarterrings_relevant_cache
-        self.stdrings_relevant_dataframe = stdrings_relevant_dataframe or _stdrings_relevant_cache
+        self.dataframe_relevant_data = dataframe_relevant_data #or _relevant_data_cache
+        self.quarterrings_dataframe = quarterrings_dataframe #or _quarterrings_data_cache
+        self.stdrings_dataframe = stdrings_dataframe #or _stdrings_data_cache
+        self.quarterrings_relevant_dataframe = quarterrings_relevant_dataframe #or _quarterrings_relevant_cache
+        self.stdrings_relevant_dataframe = stdrings_relevant_dataframe #or _stdrings_relevant_cache
 
         # initialize attributes columns columns
         self.clEt = self.dataframe_relevant_data["cluster_et"]
@@ -100,25 +101,91 @@ class CreateInput:
         
         return self.XtrT, self.XteT, self.ytr, self.yte
 
-    @classmethod
-    def data_builder(self):
-        pass
-        # # TREINA OS MODELOS PARA CADA TIPO DE RING E SALVA OS ARQUIVOS
-        # for userings in range(1,3):
-        #     [Reta, E_E1E2, E_EM, E_E0E1, RHad, rings, qrings] = CreateInput.set_data(
-        #     self.dataframe_relevant_data, self.stdrings_dataframe, self.quarterrings_dataframe, userings, delta)
-            
-        #     # Não alterar definição global dps x e y
-        #     XtrT, XteT, ytr, yte = CreateInput.create_input(self.dataframe_relevant_data["cluster_et"],
-        #                                     self.dataframe_relevant_data["cluster_eta"],
-        #                                     self.dataframe_relevant_data["cluster_phi"],
-        #                                     Reta,
-        #                                     E_EM,
-        #                                     E_E1E2,
-        #                                     E_E0E1,
-        #                                     RHad,
-        #                                     rings,
-        #                                     qrings,
-        #                                     self.dataframe_relevant_data["alpha"],
-        #                                     random_state,
-        #                                     userings)
+def split_dataframe(data, params):
+    
+    if params is None:
+        return [data.reset_index(drop=True)]
+
+    result_list = []
+    data_remaining = data.copy()
+
+    for group_conditions in params:
+        masks = []
+        print('group_conditions: ', group_conditions)
+        for condition_dict in group_conditions:
+            print('condition_dict: ', condition_dict)
+            for col_name, intervals in condition_dict.items():
+                print('col_name: ', col_name)
+                print('intervals: ', intervals)
+                print ('intervals[0]: ', intervals[0], 'intervals[1]: ', intervals[1])
+                print('TESTANDO')
+                masks.append(make_mask(data_remaining[col_name], intervals))
+                print('masks: ', masks)
+
+        # Usa NumPy para combinar as máscaras (mais rápido que reduce com pandas)
+        if masks:
+            combined_mask = np.logical_and.reduce(masks)
+        else:
+            combined_mask = np.zeros(len(data_remaining), dtype=bool)
+
+        # Filtra e adiciona à lista de resultados
+        filtered = data_remaining.loc[combined_mask]
+        result_list.append(filtered.reset_index(drop=True))
+
+        # Remove linhas já usadas
+        data_remaining = data_remaining.loc[~combined_mask]
+
+    # Adiciona o que sobrou
+    result_list.append(data_remaining.reset_index(drop=True))
+
+    return result_list
+    
+def make_mask(column, values):
+    print('values no metodo make_mask', values)
+    
+
+    """
+    Create a boolean mask from a pandas Series based on either discrete values
+    or an interval [min, max].
+
+    Parameters
+    ----------
+    column : pandas.Series
+        Column from which the mask will be created.
+    values : list, tuple, set, pandas.Series, numpy.ndarray
+        - If it contains multiple discrete values, rows matching those values are selected.
+        - If it has exactly two elements [min, max]:
+            * Both defined   -> select values >= min and < max
+            * Only min       -> select values >= min
+            * Only max       -> select values < max
+            * Both None      -> select all values
+
+    Returns
+    -------
+    numpy.ndarray
+        Boolean mask array.
+    """
+    # Ensure values is iterable
+    if not isinstance(values, (list, tuple, set, pd.Series, np.ndarray)):
+        print('values no metodo make_mask', values)
+        values = [values]
+
+    # Case: interval [min, max]
+    if len(values) == 2 and all(isinstance(v, (int, float, type(None))) for v in values):
+        min_val, max_val = values
+        print('min val: ', min_val)
+        print('max val: ', max_val)
+
+        if min_val is not None and max_val is not None:
+            mask = (column >= min_val) & (column < max_val)
+        elif min_val is not None:  # only min defined
+            mask = column >= min_val
+        elif max_val is not None:  # only max defined
+            mask = column < max_val
+        else:  # both None -> all True
+            pass
+    else:
+        # Case: list of discrete values
+        mask = column.isin(values)
+
+    return mask.to_numpy()
