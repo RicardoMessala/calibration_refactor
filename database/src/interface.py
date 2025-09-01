@@ -4,54 +4,57 @@ import numpy as np
 import sklearn.model_selection
 from database.src import dataset_preprocessing
 from database.connection import sql_connection
-from database.src.dataset_config import CreateInput
 
-# # External caching of data
-# _relevant_data_cache = sql_connection.get_relevant_data()
-# _quarterrings_data_cache = sql_connection.get_quarter_rings_data()
-# _stdrings_data_cache = sql_connection.get_standard_rings_data()
-# _quarterrings_relevant_cache = sql_connection.set_quarter_rings_data()
-# _stdrings_relevant_cache = sql_connection.set_standard_rings_data()
-
-class SetupInputs:
+def set_data(data):
+    # Se não for lista, transforma em lista
+    if not isinstance(data, list):
+        data = [data]
     
-    def __init__(self,
-                    dataframe_relevant_data=None,
-                    quarterrings_dataframe=None,
-                    stdrings_dataframe=None,
-                    quarterrings_relevant_dataframe=None,
-                    stdrings_relevant_dataframe=None):
+    for item in data:
+       #usar as funções de split data
+       #algumacoisa.append()
+       pass
+    #return algumacoisa
 
-        # Initialize data attributes
-        self.dataframe_relevant_data = dataframe_relevant_data or _relevant_data_cache
-        self.quarterrings_dataframe = quarterrings_dataframe or _quarterrings_data_cache
-        self.stdrings_dataframe = stdrings_dataframe or _stdrings_data_cache
-        self.quarterrings_relevant_dataframe = quarterrings_relevant_dataframe or _quarterrings_relevant_cache
-        self.stdrings_relevant_dataframe = stdrings_relevant_dataframe or _stdrings_relevant_cache
+def executar_algoritmos(data, params):
+    if not isinstance(data, list):
+        data = [data]
 
-        #Initialize LoopBuilder Class
-        self.LoopBuilder = LoopBuilder
-        self.CreateInput = CreateInput
-
-    def get_inputs(self, params, rigns_type: str):
-        wrappers = {
-            "quarterrings": self.quarterrings_relevant_dataframe,
-            "stdrings": self.stdrings_relevant_dataframe,
-            # Adicione outros wrappers aqui no futuro (ex: "catboost": CatBoostWrapper)
-        }
-        
-        wrapper_data= wrappers.get(rigns_type.lower())
-
-        return self.LoopBuilder(wrapper_data, params).split_dataframe_by_groups()
-
-
-    def set_inputs(self, ):
-        
-
-        # meter o laço do for chamando o create inputs aqui
-        
+    for item in data:  
+        #executar o algoritmo com os parametros - Criar a classe de seleção para os algoritmos
+        #append reseultados do algoritmo
         pass
-    def input_builder(self):
+    #return resultados com append
 
-        #Fazer o construtor
-        pass
+#criar classe seletora de algortimos
+
+class MasterFactory:
+    def __init__(self):
+        self._optimazation = {
+                "cpu": CPU,
+                "gpu": GPU,
+            }
+
+        self.calibration = {
+                "os": OperatingSystem,
+                "antivirus": Antivirus,
+            }
+
+    def create_product(self, optimization_name, calibration_name, **kwargs):
+
+        optimization_name = optimization_name.lower()
+        calibration_name = calibration_name.lower()
+
+        # Step 1: Find the sub-factory (the optimization's dictionary)
+        tmp_optimization = self._optimazation.get(optimization_name)
+        if not tmp_optimization:
+            raise ValueError(f"Unknown product optimization: '{optimization_name}'")
+
+        # Step 2: Find the class within the sub-factory
+        tmp_calibration = self.calibration.get(calibration_name)
+        if not tmp_calibration:
+            raise ValueError(f"Unknown product calibration '{calibration_name}' in optimization '{optimization_name}'")
+
+        # Step 3: Create the instance with the kwargs
+        print(f"\nFactory: Creating '{calibration_name}' from the '{optimization_name}' optimization...")
+        return tmp_optimization(tmp_calibration, **kwargs)
