@@ -21,7 +21,7 @@ class OptFactory:
                         'mse':mean_squared_error,
                     }
      
-    def _select_model_class(self, model_class, *args, **kwargs):
+    def _select_model_class(self, model_class, X_train, y_train, X_test, y_test):
         """
         Selects and returns the correct model class instance.
 
@@ -36,11 +36,11 @@ class OptFactory:
             cls = self.MODEL_CLASSES.get(model_class)
             if cls is None:
                 raise ValueError(f"Model class '{model_class}' not found in MODEL_CLASSES.")
-            return cls(*args, **kwargs)
+            return cls(X_train, y_train, X_test, y_test)
 
         # Case: class
         elif inspect.isclass(model_class):
-            return model_class(*args, **kwargs)
+            return model_class(X_train, y_train, X_test, y_test)
 
         # Case: instance
         else:
