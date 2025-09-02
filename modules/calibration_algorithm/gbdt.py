@@ -1,36 +1,47 @@
 import lightgbm as lgb
 import xgboost as xgb
+from abc import ABC, abstractmethod
 
-class GBDTTrainning:
+class CalibrationFactory:
+    
+    @abstractmethod
+    def train(self, X_train, y_train, X_test, y_test):
+        pass
+        
+    @abstractmethod    
+    def predict(self, model):
+        pass
 
-    def __init__(self, params, **kwargs):
-        for key, value in kwargs.items():
-            setattr(self, key, value)
+class LGBMTrainning:
 
-        self.params = params
-        self.stopping_rounds = getattr(self, "stopping_rounds", 5)
+    def __init__(self, X_train, y_train, X_test, y_test):
+        self.X_train = X_train
+        self.y_train = y_train
+        self.X_test = X_test
+        self.y_test = y_test
 
-    def train(self, XtrT, ytr, XteT, yte):
+    def train(self, params, **kwargs):
         # Criar os datasets
-        lgb_train = lgb.Dataset(XtrT, ytr)
-        lgb_test = lgb.Dataset(XteT, yte, reference=lgb_train)
+        lgb_train = lgb.Dataset(self.X_train, self.y_train)
+        lgb_test = lgb.Dataset(self.X_test, self.y_test, reference=lgb_train)
 
         # Treinar o modelo sem normalização
-        model = lgb.train(self.params, lgb_train, valid_sets=[lgb_test, lgb_train], callbacks=[lgb.early_stopping(stopping_rounds=self.stopping_rounds)])
-        
+        model = lgb.train(params=params, train_set=lgb_train,
+                          valid_sets=[lgb_test],
+                          **kwargs)
         return model
     
-    def predict(self, model, X_test):
-        predictions = model.predict(X_test)
+    def predict(self, model):
+        predictions = model.predict(self.X_test)
         return predictions
 
 class XGBoostTraining: # Treinador para XGBoost
-    def __init__(self, params, stopping_rounds=10, **kwargs):
+    def __init__(self, params, **kwargs):
         for key, value in kwargs.items():
             setattr(self, key, value)
             
         self.params = params
-        self.stopping_rounds = stopping_rounds
+        self.stopping_rounds = 'stopping_rounds'
 
     def train(self, Xtr, ytr, Xte, yte):
         dtrain = xgb.DMatrix(Xtr, label=ytr)

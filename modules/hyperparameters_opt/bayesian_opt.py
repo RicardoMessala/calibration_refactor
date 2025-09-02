@@ -1,66 +1,153 @@
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-from modules.wrappers.core import LGBMWrapper, XGBoostWrapper
+from modules.calibration_algorithm import gbdt
 from skopt import gp_minimize
 from skopt.utils import use_named_args
-import numpy as np
+import inspect
 
-class BayesianOptimization:
+class OptFactory:
     """
-    Classe de otimização que seleciona e instancia o wrapper de modelo
-    apropriado com base no 'model_type' fornecido.
+    Create an abstract factory for optimization classes.
     """
-    def __init__(self, model_type, X_train, y_train, X_test, y_test, space, fixed_params, metric=mean_absolute_error):
+
+    # Dictionary mapping strings to classes
+    MODEL_CLASSES = {
+                    'lgbm': gbdt.LGBMTrainning,
+                    'xgboost': gbdt.XGBoostTraining,
+                }
+
+    # Dictionary mapping strings to metric functions
+    METRIC_FUNCTIONS = {
+                        'mae': mean_absolute_error,
+                        'mse':mean_squared_error,
+                    }
+     
+    def _select_model_class(self, model_class, *args, **kwargs):
+        """
+        Selects and returns the correct model class instance.
+
+        Rules:
+        1. If model_class is a string, looks it up in MODEL_CLASSES and instantiates the corresponding class.
+        2. If model_class is a class, instantiates it with the given args and kwargs.
+        3. If model_class is already an instance, returns it directly.
+        """
+        # Case: string
+        if isinstance(model_class, str):
+            model_class = model_class.lower()
+            cls = self.MODEL_CLASSES.get(model_class)
+            if cls is None:
+                raise ValueError(f"Model class '{model_class}' not found in MODEL_CLASSES.")
+            return cls(*args, **kwargs)
+
+        # Case: class
+        elif inspect.isclass(model_class):
+            return model_class(*args, **kwargs)
+
+        # Case: instance
+        else:
+            return model_class
+
+    def _select_metric(self, metric, y_test, y_pred):
+        """
+        Selects and applies the appropriate validation metric.
+
+        Rules:
+        1. If metric is a string, looks it up in METRIC_FUNCTIONS and applies the corresponding function.
+        2. If metric is a callable (function), calls it directly with y_test, y_pred, and any additional arguments.
+        3. Returns the computed metric value.
+        """
+        # Case: string
+        if isinstance(metric, str):
+            metric = metric.lower()
+            func = self.METRIC_FUNCTIONS.get(metric)
+            if func is None:
+                raise ValueError(f"Metric '{metric}' not found in METRIC_FUNCTIONS.")
+            return func(y_test, y_pred)
+
+        # Case: callable
+        elif callable(metric):
+            return metric(y_test, y_pred)
+
+        else:
+            raise TypeError("Metric must be either a string key or a callable function.")
+
+class BayesianOptimization(OptFactory):
+    """
+    Optimization class that selects and instantiates the appropriate model
+    wrapper based on the provided 'model_type'.
+    """
+    
+    def __init__(self, X_train, y_train, X_test, y_test):
+        """
+        Initialize the Bayesian optimization with training and test data.
+        
+        Args:
+            X_train: Training features
+            y_train: Training targets
+            X_test: Test features
+            y_test: Test targets
+        """
         self.X_train = X_train
         self.y_train = y_train
         self.X_test = X_test
         self.y_test = y_test
-        self.space = space
-        self.fixed_params = fixed_params
-        self.metric = metric
-        
-        # O Padrão "Factory" acontece aqui!
-        self.model_wrapper = self._get_wrapper(model_type)
     
-    def _get_wrapper(self, model_type: str):
+    def _create_objective_func(self, model_class, space, fixed_params, metric, objective_func_kwargs:dict=None):
         """
-        Método Fábrica: Mapeia uma string para a classe Wrapper correspondente
-        e a instancia.
+        Create the objective function for optimization.
+        
+        Args:
+            model_class: Model class to optimize
+            space: Search space for hyperparameters
+            fixed_params: Fixed parameters for the model
+            metric: Evaluation metric
+            
+        Returns:
+            Objective function for gp_minimize
         """
-        # Mapa de wrappers disponíveis
-        available_wrappers = {
-            "lightgbm": LGBMWrapper,
-            "xgboost": XGBoostWrapper,
-            # Adicione outros wrappers aqui no futuro (ex: "catboost": CatBoostWrapper)
-        }
-        
-        wrapper_class = available_wrappers.get(model_type.lower())
-        
-        if wrapper_class is None:
-            raise ValueError(f"Modelo '{model_type}' não suportado. "
-                             f"Opções disponíveis: {list(available_wrappers.keys())}")
-        
-        # Instancia o wrapper selecionado, passando os dados de validação
-        print(f"Wrapper para o modelo '{model_type}' selecionado.")
-        return wrapper_class(self.X_train, self.y_train, self.X_test, self.y_test)
-    
-    def set_parameters():
-        pass
-
-    def _create_objective_func(self):
-        @use_named_args(self.space)
+        @use_named_args(space)
         def objective(**params):
-            all_params = {**params, **self.fixed_params}
-            model = self.model_wrapper.train(**all_params)
-            y_pred = self.model_wrapper.predict(model)
-            score = mean_absolute_error(self.y_test, y_pred)
-            return score
+            model_wrapper = self._select_model_class(
+                model_class, self.X_train, self.y_train, 
+                self.X_test, self.y_test
+            )
+            all_params = {**params, **fixed_params}
+            model = model_wrapper.train(**all_params, **objective_func_kwargs)
+            y_pred = model_wrapper.predict(model)
+            return self._select_metric(metric, self.y_test, y_pred)
+        
         return objective
-
-    def run(self, **kwargs):
-        print("\nIniciando a otimização Bayesiana com gp_minimize...")
-        result_gp = gp_minimize(
-            func=self._create_objective_func(),
-            dimensions=self.space,
+    
+    def run(self, model_class, space, fixed_params, metric, objective_func_kwargs: dict=None, **kwargs):
+        """
+        Run Bayesian optimization.
+        
+        Args:
+            model_class: Model class to optimize
+            space: Search space for hyperparameters
+            fixed_params: Fixed parameters for the model
+            metric: Evaluation metric
+            **optimization_kwargs: Additional parameters for gp_minimize
+            
+        Returns:
+            Optimization result from gp_minimize
+        """
+        objective_func = self._create_objective_func(
+            model_class, space, fixed_params, metric, objective_func_kwargs
+        )
+        
+        return gp_minimize(
+            func=objective_func,
+            dimensions=space,
             **kwargs
         )
-        return result_gp
+
+class GeneticOptimization(OptFactory):
+
+    def __init__ (self, X_train, y_train, X_test, y_test):
+        pass
+
+    def _create_objective_func(self, model_class, space, fixed_params):
+        pass
+
+    def run(self, model_class, space, fixed_params,  **kwargs):
+        pass

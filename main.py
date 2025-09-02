@@ -42,7 +42,7 @@ fixed_params_lgbm = {
     'random_state': 42, 'n_jobs': -1, 'verbose': -1
 }
 
-# Simplesmente passe 'model_type="lightgbm"'
+# Simplesmente passe 'model_type="li ghtgbm"'
 optimizer_lgbm = BayesianOptimization(
     model_type="lightgbm",
     X_train=X_train, y_train=y_train, X_test=X_test, y_test=y_test,
