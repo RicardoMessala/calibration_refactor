@@ -1,37 +1,43 @@
 import lightgbm as lgb
 import xgboost as xgb
-from abc import ABC, abstractmethod
+import numpy as np
+import pandas as pd
+import lightgbm as lgb
 
-class CalibrationFactory:
-    
-    @abstractmethod
-    def train(self, X_train, X_test, y_train, y_test):
-        pass
-        
-    @abstractmethod    
-    def predict(self, model):
-        pass
+from typing import Any
+
 
 class LGBMTrainning:
-
-    def __init__(self, X_train, X_test, y_train, y_test):
+    def __init__(
+        self,
+        X_train: np.ndarray | pd.DataFrame,
+        X_test: np.ndarray | pd.DataFrame,
+        y_train: np.ndarray | pd.Series | list[float] | list[int],
+        y_test: np.ndarray | pd.Series | list[float] | list[int],
+    ) -> None:
+        
         self.X_train = X_train
         self.y_train = y_train
         self.X_test = X_test
         self.y_test = y_test
 
-    def train(self, params, **kwargs):
-        # Criar os datasets
+    def train(
+        self,
+        params: dict[str, Any],
+        **kwargs: Any
+    ) -> lgb.Booster:
+        
         lgb_train = lgb.Dataset(self.X_train, self.y_train)
         lgb_test = lgb.Dataset(self.X_test, self.y_test, reference=lgb_train)
-
-        # Treinar o modelo sem normalização
-        model = lgb.train(params=params, train_set=lgb_train,
-                          valid_sets=[lgb_test],
-                          **kwargs)
+        model = lgb.train(
+            params=params,
+            train_set=lgb_train,
+            valid_sets=[lgb_test],
+            **kwargs
+        )
         return model
-    
-    def predict(self, model):
+
+    def predict(self, model: lgb.Booster) -> np.ndarray:
         predictions = model.predict(self.X_test)
         return predictions
 
