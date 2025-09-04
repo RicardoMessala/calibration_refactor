@@ -153,14 +153,8 @@ def split_dataframe(data, params):
 
     for group_conditions in params:
         masks = []
-        print('group_conditions: ', group_conditions)
         for condition_dict in group_conditions:
-            print('condition_dict: ', condition_dict)
             for col_name, intervals in condition_dict.items():
-                print('col_name: ', col_name)
-                print('intervals: ', intervals)
-                print ('intervals[0]: ', intervals[0], 'intervals[1]: ', intervals[1])
-                print('TESTANDO')
                 masks.append(_make_mask(data_remaining[col_name], intervals))
 
         # Usa NumPy para combinar as máscaras (mais rápido que reduce com pandas)
@@ -182,7 +176,6 @@ def split_dataframe(data, params):
     return result_list
     
 def _make_mask(column, values):
-    print('NEW COLUMNS')
     """
     Cria uma máscara booleana a partir de uma pandas Series com base em valores
     discretos ou em um intervalo [min, max].
@@ -216,7 +209,6 @@ def _make_mask(column, values):
         # Define a coluna a ser usada para comparação.
         # Se o nome da coluna for 'cluster_eta', usa seu valor absoluto.
         if column.name == 'cluster_eta':
-            print(f"INFO: Aplicando comparação com módulo para a coluna '{column.name}'.")
             target_column = column.abs()
         else:
             target_column = column

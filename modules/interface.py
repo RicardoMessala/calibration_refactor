@@ -84,17 +84,10 @@ class RunOptimization(AbstractFactory):
         """
         results = []
         if datasets and not isinstance(datasets[0], (list, tuple)):
-            print("[INFO] Estrutura de dados 1D detectada. Adicionando uma dimensão para compatibilidade.")
             # Envolve a lista 'datasets' em outra lista para torná-la 2D.
             datasets = [datasets]
 
         for data  in datasets:
-            print(f"\n[INFO] Running optimization", len(data))
-            print(type(data))
-            print(type(data[0]))
-            print(type(data[1]))
-            print(type(data[2]))
-            print(type(data[3]))
             X_train, X_test, y_train, y_test = data
             optimizer = self._select_model_class(opt_class, X_train, X_test, y_train, y_test)
             
@@ -137,8 +130,6 @@ class RunModel(AbstractFactory):
         results = []
 
         for i, (X_train, X_test, y_train, y_test) in enumerate(datasets, start=1):
-            print(f"\n[INFO] Running LGBM {i}/{len(datasets)}...")
-
             runner = self._select_model_class(model_class, X_train, X_test, y_train, y_test)
 
             res = runner.run(
