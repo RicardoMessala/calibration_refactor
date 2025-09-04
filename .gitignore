@@ -3,3 +3,4 @@ database/data/
 
 # Ignore files:
 .env
+to_do.txt
