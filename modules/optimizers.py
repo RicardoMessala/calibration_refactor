@@ -1,5 +1,5 @@
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-from modules.calibration_algorithm import gbdt
+from modules import models
 from skopt import gp_minimize
 from skopt.utils import use_named_args
 import inspect
@@ -11,8 +11,8 @@ class OptFactory:
 
     # Dictionary mapping strings to classes
     MODEL_CLASSES = {
-                    'lgbm': gbdt.LGBMTrainning,
-                    'xgboost': gbdt.XGBoostTraining,
+                    'lgbm': models.LGBMTrainning,
+                    'xgboost': models.XGBoostTraining,
                 }
 
     # Dictionary mapping strings to metric functions
@@ -21,7 +21,7 @@ class OptFactory:
                         'mse':mean_squared_error,
                     }
      
-    def _select_model_class(self, model_class, X_train, y_train, X_test, y_test):
+    def _select_model_class(self, model_class, X_train, X_test, y_train, y_test):
         """
         Selects and returns the correct model class instance.
 
@@ -36,11 +36,11 @@ class OptFactory:
             cls = self.MODEL_CLASSES.get(model_class)
             if cls is None:
                 raise ValueError(f"Model class '{model_class}' not found in MODEL_CLASSES.")
-            return cls(X_train, y_train, X_test, y_test)
+            return cls(X_train, X_test, y_train, y_test)
 
         # Case: class
         elif inspect.isclass(model_class):
-            return model_class(X_train, y_train, X_test, y_test)
+            return model_class(X_train, X_test, y_train, y_test)
 
         # Case: instance
         else:
@@ -76,7 +76,7 @@ class BayesianOptimization(OptFactory):
     wrapper based on the provided 'model_type'.
     """
     
-    def __init__(self, X_train, y_train, X_test, y_test):
+    def __init__(self, X_train, X_test, y_train, y_test):
         """
         Initialize the Bayesian optimization with training and test data.
         
@@ -91,7 +91,7 @@ class BayesianOptimization(OptFactory):
         self.X_test = X_test
         self.y_test = y_test
     
-    def _create_objective_func(self, model_class, space, fixed_params, metric, objective_func_kwargs:dict=None):
+    def _create_objective_func(self, model_class, space, fixed_params, metric, calibration_kwargs:dict=None):
         """
         Create the objective function for optimization.
         
@@ -104,20 +104,21 @@ class BayesianOptimization(OptFactory):
         Returns:
             Objective function for gp_minimize
         """
+        model_wrapper = self._select_model_class(
+            model_class, 
+            self.X_train, self.X_test, self.y_train, self.y_test,
+        )
+
         @use_named_args(space)
         def objective(**params):
-            model_wrapper = self._select_model_class(
-                model_class, self.X_train, self.y_train, 
-                self.X_test, self.y_test
-            )
             all_params = {**params, **fixed_params}
-            model = model_wrapper.train(**all_params, **objective_func_kwargs)
+            model = model_wrapper.train(params=all_params, **calibration_kwargs)
             y_pred = model_wrapper.predict(model)
             return self._select_metric(metric, self.y_test, y_pred)
         
         return objective
     
-    def run(self, model_class, space, fixed_params, metric, objective_func_kwargs: dict=None, **kwargs):
+    def run(self, model_class, space, fixed_params, metric, calibration_kwargs: dict=None, **kwargs):
         """
         Run Bayesian optimization.
         
@@ -132,7 +133,7 @@ class BayesianOptimization(OptFactory):
             Optimization result from gp_minimize
         """
         objective_func = self._create_objective_func(
-            model_class, space, fixed_params, metric, objective_func_kwargs
+            model_class, space, fixed_params, metric, calibration_kwargs
         )
         
         return gp_minimize(
@@ -143,7 +144,7 @@ class BayesianOptimization(OptFactory):
 
 class GeneticOptimization(OptFactory):
 
-    def __init__ (self, X_train, y_train, X_test, y_test):
+    def __init__ (self, X_train, X_test, y_train, y_test):
         pass
 
     def _create_objective_func(self, model_class, space, fixed_params):
