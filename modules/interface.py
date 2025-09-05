@@ -15,7 +15,7 @@ class AbstractFactory(ABC):
     """
 
     OPTIMIZATION_CLASSES: dict[str, Type[Any]] = {
-        'gp_minimize': BayesianOptimization(),
+        'gp_minimize': BayesianOptimization,
     }
 
     MODEL_CLASSES: dict[str, Type[Any]] = {
@@ -95,6 +95,10 @@ class AbstractFactory(ABC):
 
 class RunOptimization(AbstractFactory):
 
+    def __init__(self):
+        self.optimizer: List[Any] = []
+        self.model: List[Any] = []
+
     def run_multiple_optimizations(
         self,
         opt_class: Union[str, Type[Any], Any],
@@ -120,12 +124,15 @@ class RunOptimization(AbstractFactory):
             datasets = [datasets]
 
         for data in datasets:
-            tmp_optimizer = self._get_component(opt_class,'OPTIMIZATION_CLASSES', False)
-            tmp_model_class = self._get_component(model_class,'MODEL_CLASSES', True, data)
+            tmp_optimizer_class = self._get_component(opt_class,'OPTIMIZATION_CLASSES', False)
+            tmp_model_instance = self._get_component(model_class,'MODEL_CLASSES', True, data)
             tmp_metric=self._get_component(metric, 'METRIC_FUNCTIONS', False)
-            tmp_metric=partial(tmp_metric, data[3])
-            res = tmp_optimizer.run(
-                model_class=tmp_model_class,
+
+            # 1. Create the optimizer instance and STORE IT in a new variable.
+            optimizer_instance = tmp_optimizer_class(tmp_model_instance)
+
+            # 2. Use this new instance to run the optimization.
+            res = optimizer_instance.run(
                 space=space,
                 fixed_params=fixed_params,
                 metric=tmp_metric,
@@ -133,6 +140,8 @@ class RunOptimization(AbstractFactory):
                 **(optimization_kwargs or {})
             )
 
+            # 3. Append the INSTANCE (not the class) to your list.
+            self.optimizer.append(optimizer_instance)
             results.append(res)
 
         return results
