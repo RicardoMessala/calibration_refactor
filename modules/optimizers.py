@@ -26,6 +26,9 @@ class BayesianOptimization:
                             possessing .y_test, .train(), and .predict() methods.
         """
         self.model_instance = model_instance
+        self.X_train = self.model_instance.X_train
+        self.X_test = self.model_instance.X_test
+        self.y_train = self.model_instance.y_train
         self.y_test = self.model_instance.y_test
         
         # Attributes to store optimization results and configuration
@@ -33,6 +36,7 @@ class BayesianOptimization:
         self.best_params_: dict = None
         self.best_score_: float = None
         self.best_model_ = None
+        self.y_pred = None
         
         # Storing params used during the run for the final fit
         self._fixed_params: dict = None
@@ -98,7 +102,7 @@ class BayesianOptimization:
 
         return result
 
-    def get_best_model(self):
+    def _set_best_model(self):
         """
         Trains and stores the final model using the best parameters found by `run()`.
         
@@ -122,7 +126,12 @@ class BayesianOptimization:
         print("Final model has been trained and is stored in the '.best_model_' attribute.")
         
         return self
-
+    
+    def get_best_model(self):
+        self._set_best_model()
+        self.y_pred = self.model_instance.predict(self.best_model_)
+        
+        return self
 class GeneticOptimization:
 
     def _create_objective_func(self, model_instance, space, fixed_params):

@@ -143,7 +143,7 @@ def prepare_and_split_data(
 
     return results
 
-def split_dataframe(data, params):
+def split_dataframe(data, params=None):
     
     if params is None:
         return [data.reset_index(drop=True)]

@@ -38,8 +38,8 @@ class LGBMTrainning:
         return model
 
     def predict(self, model: lgb.Booster) -> np.ndarray:
-        predictions = model.predict(self.X_test)
-        return predictions
+        y_pred = model.predict(self.X_test)
+        return y_pred
 
 class XGBoostTraining: # Treinador para XGBoost
     def __init__(self, params, **kwargs):

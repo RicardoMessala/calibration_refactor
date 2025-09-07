@@ -142,6 +142,7 @@ class RunOptimization(AbstractFactory):
 
             # 3. Append the INSTANCE (not the class) to your list.
             self.optimizer.append(optimizer_instance)
+            self.model.append(tmp_model_instance)
             results.append(res)
 
         return results
