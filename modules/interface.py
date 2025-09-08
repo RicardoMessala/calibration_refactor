@@ -99,7 +99,7 @@ class RunOptimization(AbstractFactory):
         self.optimizer: List[Any] = []
         self.model: List[Any] = []
 
-    def run_multiple_optimizations(
+    def run(
         self,
         opt_class: Union[str, Type[Any], Any],
         model_class: Union[str, Type[Any], Any],
@@ -149,36 +149,68 @@ class RunOptimization(AbstractFactory):
 
 
 class RunModel(AbstractFactory):
+    """
+    A class to run training for a specific model across multiple datasets.
+    It uses the AbstractFactory pattern to instantiate model and metric components.
+    """
 
-    def run_multiple_lgbm(
+    def __init__(self) -> None:
+        """
+        Initializes the model runner.
+        Prepares a list to store the trained model instances after execution.
+        """
+        self.models: List[Any] = []
+
+    def run(
         self,
         model_class: Union[str, Type[Any], Any],
-        datasets: List[Tuple[
-            Union[np.ndarray, pd.DataFrame],
-            Union[np.ndarray, pd.DataFrame],
-            Union[np.ndarray, pd.Series, list[float], list[int]],
-            Union[np.ndarray, pd.Series, list[float], list[int]]
-        ]],
+        datasets: List[Tuple[Any, ...]],
         params: dict[str, Any],
-        metric: str = "mae",
-        num_boost_round: int = 100,
-        early_stopping_rounds: int = 10
+        calibration_kwargs: Optional[dict[str, Any]] = None,
     ) -> List[Any]:
         """
-        Run LGBMRunner in loop for multiple datasets.
+        Executes the training of a single model configuration on one or more datasets.
+
+        Args:
+            model_class (Union[str, Type[Any], Any]): The model identifier (e.g., 'lgbm'), 
+                                                      the model class itself, or an already 
+                                                      created instance.
+            datasets (List[Tuple[Any, ...]]): A list of tuples, where each tuple contains 
+                                              the data for one run (e.g., X_train, X_test, 
+                                              y_train, y_test). Can also be a single tuple.
+            params (dict[str, Any]): A dictionary containing the hyperparameters for 
+                                     the model training.
+            metric (Union[str, Callable[..., float]]): The evaluation metric to use. 
+                                                       Can be an identifier string (e.g., 'mae') 
+                                                       or a callable function.
+            num_boost_round (int): The number of boosting rounds for training.
+            early_stopping_rounds (int): The number of rounds to wait for improvement 
+                                         before stopping early.
+
+        Returns:
+            List[Any]: A list containing the results from the training run on each dataset.
         """
         results: List[Any] = []
 
-        for X_train, X_test, y_train, y_test in datasets:
-            model_class = self._get_component(model_class, X_train, X_test, y_train, y_test)
+        # Ensure 'datasets' is always a list of datasets to allow a consistent loop
+        if datasets and not isinstance(datasets[0], (list, tuple)):
+            datasets = [datasets]
 
-            res = model_class.run(
+        for data in datasets:
+            # 1. Get the model instance from the factory.
+            #    We pass `instantiate=True` to create a new model object for each dataset,
+            #    and `args=(data,)` to pass the dataset into the model's constructor.
+            model_instance = self._get_component(model_class,'MODEL_CLASSES', True, data)
+
+            # 2. Execute the 'run' method on the newly created model instance.
+            res = model_instance.train(
                 params=params,
-                metric=metric,
-                num_boost_round=num_boost_round,
-                early_stopping_rounds=early_stopping_rounds
+                **(calibration_kwargs or {})
             )
 
+            # 4. Store the trained model instance and its corresponding result.
+            self.models.append(model_instance)
             results.append(res)
 
         return results
+    

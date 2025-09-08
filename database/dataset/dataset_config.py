@@ -64,7 +64,7 @@ def prepare_and_split_data(
     stdrings_df: Union[pd.DataFrame, List[pd.DataFrame]],
     qrings_df: Optional[Union[pd.DataFrame, List[pd.DataFrame]]] = None,
     mode: Optional[str] = None,
-    train_size: float = 0.8,
+    train_size: float = 0.7,
     random_state: Optional[int] = None
 ) -> List[Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]]:
     """

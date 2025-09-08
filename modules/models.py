@@ -20,6 +20,7 @@ class LGBMTrainning:
         self.y_train = y_train
         self.X_test = X_test
         self.y_test = y_test
+        self.y_pred: np.ndarray | pd.Series | list[float] | list[int] = None
 
     def train(
         self,
@@ -38,8 +39,8 @@ class LGBMTrainning:
         return model
 
     def predict(self, model: lgb.Booster) -> np.ndarray:
-        y_pred = model.predict(self.X_test)
-        return y_pred
+        self.y_pred = model.predict(self.X_test, num_iteration=model.best_iteration)
+        return self.y_pred
 
 class XGBoostTraining: # Treinador para XGBoost
     def __init__(self, params, **kwargs):
