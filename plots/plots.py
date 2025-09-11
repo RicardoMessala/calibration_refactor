@@ -63,13 +63,15 @@ def merge_dataframes(
 
 def parameters_filter(
     data: pd.DataFrame,
-    bins: dict,
+    bins: Dict[str, List[float]],
     cols: Union[str, List[str], None] = None
 ) -> Union[List[pd.DataFrame], List[pd.Series]]:
     """
     Filters a DataFrame into bins based on specified column intervals.
     Each filtering step removes the selected rows from the dataset
-    to avoid duplicates across intervals.
+    to avoid duplicates across intervals. Includes bins for values
+    outside the specified ranges (less than the first edge and greater
+    than the last edge).
 
     Parameters
     ----------
@@ -87,39 +89,50 @@ def parameters_filter(
     list[pd.DataFrame] or list[pd.Series]
         List of filtered objects according to the bins.
     """
-    # Lista que armazenará os resultados
     result: List[Union[pd.DataFrame, pd.Series]] = []
+    unassigned_mask = pd.Series(True, index=data.index)
 
-    # Cópia do DataFrame para remoção progressiva das linhas filtradas
-    data_copy: pd.DataFrame = data.copy()
-
-    # Itera pelas colunas e intervalos definidos no dicionário bins
     for col, intervals in bins.items():
-        filtered_df: pd.DataFrame
-        mask: pd.Series
+        # Cria uma lista de intervalos estendida para incluir os casos fora dos limites
+        # Ex: [10, 20] se torna [-inf, 10, 20, inf]
+        extended_intervals = [-np.inf] + sorted(intervals) + [np.inf]
+        
+        # --- BLOCO UNIFICADO ---
+        # Itera sobre os pares de intervalos (ex: (-inf, 10), (10, 20), (20, inf))
+        for i in range(1, len(extended_intervals)):
+            lower_bound = extended_intervals[i - 1]
+            upper_bound = extended_intervals[i]
+            # Seleciona a série de dados a ser usada, aplicando abs() se necessário
+            series_to_check = abs(data[col]) if col == "cluster_eta" else data[col]
 
-        for i in range(1, len(intervals)):
-            # Criação da máscara de filtragem
-            if col == "cluster_eta":
-                mask = (abs(data_copy[col]) <= intervals[i]) & (abs(data_copy[col]) > intervals[i - 1])
+            # Cria a máscara para o intervalo atual
+            if lower_bound == -np.inf:
+                # Caso "menor que": captura valores < limite superior
+                interval_mask = series_to_check < upper_bound
+            elif upper_bound == np.inf:
+                # Caso "maior que": captura valores > limite inferior
+                interval_mask = series_to_check > lower_bound
             else:
-                mask = (data_copy[col] <= intervals[i]) & (data_copy[col] > intervals[i - 1])
+                # Caso "entre": captura valores > limite inferior E <= limite superior
+                interval_mask = (series_to_check > lower_bound) & (series_to_check <= upper_bound)
 
-            # Aplica a máscara e reseta os índices
-            filtered_df = data_copy[mask].dropna().reset_index(drop=True)
-
-            if not filtered_df.empty:
-                # Seleciona apenas as colunas desejadas
-                if isinstance(cols, str):
-                    result.append(filtered_df[cols])
-                elif isinstance(cols, list):
-                    result.append(filtered_df[cols])
-                else:
-                    result.append(filtered_df)
-
-                # Remove os registros filtrados do DataFrame copiado
-                data_copy = data_copy.drop(filtered_df.index).reset_index(drop=True)
-
+            # A máscara final considera apenas as linhas que ainda não foram atribuídas
+            final_mask = interval_mask & unassigned_mask
+            
+            if final_mask.any():
+                filtered_df = data[final_mask].dropna().reset_index(drop=True)
+                if not filtered_df.empty:
+                    # Adiciona o resultado filtrado à lista
+                    if isinstance(cols, str):
+                        result.append(filtered_df[cols])
+                    elif isinstance(cols, list):
+                        result.append(filtered_df[cols])
+                    else:
+                        result.append(filtered_df)
+                    
+                    # Marca as linhas como "atribuídas" para não serem usadas novamente
+                    unassigned_mask[final_mask] = False
+    
     return result
 
 

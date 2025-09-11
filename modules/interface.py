@@ -2,12 +2,11 @@ import inspect
 import numpy as np
 import pandas as pd
 from skopt.space import Dimension
-from modules.models import LGBMTrainning, XGBoostTraining
+from modules.models import LGBMTraining, XGBoostTraining
 from modules.optimizers import BayesianOptimization
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from abc import ABC
 from typing import Any, Callable, Type, Union, List, Tuple, Optional
-from functools import partial
 
 class AbstractFactory(ABC):
     """
@@ -19,7 +18,7 @@ class AbstractFactory(ABC):
     }
 
     MODEL_CLASSES: dict[str, Type[Any]] = {
-        'lgbm': LGBMTrainning,
+        'lgbm': LGBMTraining,
         'xgboost': XGBoostTraining,
     }
 

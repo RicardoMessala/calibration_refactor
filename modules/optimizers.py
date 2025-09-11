@@ -57,7 +57,7 @@ class BayesianOptimization:
             """The internal function that the optimizer will call."""
             all_params = {**params, **fixed_params}
             model = self.model_instance.train(params=all_params, **(calibration_kwargs or {}))
-            y_pred = self.model_instance.predict(model)
+            y_pred = self.model_instance.predict()
             score = metric(self.y_test, y_pred)
             return score
 
@@ -94,12 +94,7 @@ class BayesianOptimization:
         self.optimizer_result_ = result
         self.best_score_ = result.fun
         self.best_params_ = {dim.name: val for dim, val in zip(space, result.x)}
-
-        print("Optimization finished.")
-        print(f"Best score ({metric.__name__}): {self.best_score_:.4f}")
-        print(f"Best parameters: {self.best_params_}")
-        print("\nTo train the final model with these parameters, call the '.fit_best_model()' method.")
-
+        
         return result
 
     def _set_best_model(self):
@@ -127,11 +122,12 @@ class BayesianOptimization:
         
         return self
     
-    def get_best_model(self):
+    def fit_best_model(self):
         self._set_best_model()
-        self.y_pred = self.model_instance.predict(self.best_model_)
+        self.y_pred = self.model_instance.predict()
         
         return self
+    
 class GeneticOptimization:
 
     def _create_objective_func(self, model_instance, space, fixed_params):
