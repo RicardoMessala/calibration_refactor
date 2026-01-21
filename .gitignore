@@ -1,6 +1,26 @@
-# Ignore folders:
+# Virtual environment
+venv/
+
+# Ignore folders
 database/data/
 
-# Ignore files:
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VS Code
+.vscode/
+
+# Ignore files
 .env
 to_do.txt
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

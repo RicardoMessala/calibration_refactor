@@ -13,13 +13,17 @@ def calc_sv(e237, e277, rings):
 
 	return Reta, E_E1E2, E_EM, E_E0E1, RHad
 
-def CalcRings(rings):
+def CalcRings(rings, cluster_eta, cluster_phi, delta_eta_calib, delta_phi_calib, hotCellEta, hotCellPhi,):
     RingsPS = rings.iloc[:,0:4]
     RingsEM1 = rings.iloc[:,8:41]
     RingsEM2 = rings.iloc[:,72:76]
     RingsEM3 = rings.iloc[:,80:84] 
     RingsHD = rings.iloc[:,88:94]
-    Rings = pd.concat([RingsPS, RingsEM1, RingsEM2, RingsEM3, RingsHD], axis=1)
+    Rings = pd.concat([RingsPS, RingsEM1, RingsEM2, RingsEM3, RingsHD, 
+                       cluster_eta, cluster_phi,
+                       delta_eta_calib, delta_phi_calib, 
+                       hotCellEta, hotCellPhi,
+                       ], axis=1)
 
     return  Rings
 

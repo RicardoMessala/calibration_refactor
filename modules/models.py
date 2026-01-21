@@ -113,7 +113,7 @@ class LGBMTraining:
 
         self.model.save_model(path)
 
-    def plot_metric(self, **kwargs: Any) -> 'matplotlib.axes.Axes':
+    def plot_metric(self, **kwargs: Any):
         """
         Plots the metric results recorded during training.
 

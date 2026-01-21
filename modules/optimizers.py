@@ -113,12 +113,9 @@ class BayesianOptimization:
 
         # Combine the best dynamic parameters with the fixed ones
         final_params = {**self.best_params_, **self._fixed_params}
-        
-        print("Training the final model with the best parameters...")
         self.best_model_ = self.model_instance.train(
             params=final_params, **self._calibration_kwargs
         )
-        print("Final model has been trained and is stored in the '.best_model_' attribute.")
         
         return self
     

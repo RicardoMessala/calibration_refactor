@@ -96,7 +96,8 @@ def parameters_filter(
         # Cria uma lista de intervalos estendida para incluir os casos fora dos limites
         # Ex: [10, 20] se torna [-inf, 10, 20, inf]
         extended_intervals = [-np.inf] + sorted(intervals) + [np.inf]
-        
+        print(len(extended_intervals))
+        print(extended_intervals)
         # --- BLOCO UNIFICADO ---
         # Itera sobre os pares de intervalos (ex: (-inf, 10), (10, 20), (20, inf))
         for i in range(1, len(extended_intervals)):
@@ -104,17 +105,16 @@ def parameters_filter(
             upper_bound = extended_intervals[i]
             # Seleciona a série de dados a ser usada, aplicando abs() se necessário
             series_to_check = abs(data[col]) if col == "cluster_eta" else data[col]
-
             # Cria a máscara para o intervalo atual
             if lower_bound == -np.inf:
                 # Caso "menor que": captura valores < limite superior
                 interval_mask = series_to_check < upper_bound
             elif upper_bound == np.inf:
-                # Caso "maior que": captura valores > limite inferior
-                interval_mask = series_to_check > lower_bound
+                # Caso "maior que": captura valores >= limite inferior
+                interval_mask = series_to_check >= lower_bound
             else:
                 # Caso "entre": captura valores > limite inferior E <= limite superior
-                interval_mask = (series_to_check > lower_bound) & (series_to_check <= upper_bound)
+                interval_mask = (series_to_check >= lower_bound) & (series_to_check < upper_bound)
 
             # A máscara final considera apenas as linhas que ainda não foram atribuídas
             final_mask = interval_mask & unassigned_mask
@@ -122,6 +122,7 @@ def parameters_filter(
             if final_mask.any():
                 filtered_df = data[final_mask].dropna().reset_index(drop=True)
                 if not filtered_df.empty:
+                    print('filtered_mask shape: ', filtered_df.shape, 'lower_bound: ', lower_bound, 'upper_bound: ', upper_bound)
                     # Adiciona o resultado filtrado à lista
                     if isinstance(cols, str):
                         result.append(filtered_df[cols])
@@ -132,6 +133,8 @@ def parameters_filter(
                     
                     # Marca as linhas como "atribuídas" para não serem usadas novamente
                     unassigned_mask[final_mask] = False
+                else:
+                    print('filtered_mask esta vazia nos intervalos: ', 'lower_bound: ', lower_bound, 'upper_bound: ', upper_bound)
     
     return result
 

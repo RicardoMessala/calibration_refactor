@@ -30,7 +30,15 @@ def set_raw_data(stdrings_cluster_dataframe: pd):
 
 def set_std_rings_data(stdrings_cluster_dataframe: pd):
 
-    return dataset_preprocessing.CalcRings(stdrings_cluster_dataframe.iloc[:, 0:99])
+    return dataset_preprocessing.CalcRings(
+        stdrings_cluster_dataframe.iloc[:, 0:99],
+        cluster_eta=stdrings_cluster_dataframe["cluster_eta"],
+        cluster_phi=stdrings_cluster_dataframe["cluster_phi"],
+        delta_eta_calib=stdrings_cluster_dataframe["delta_eta_calib"],
+        delta_phi_calib=stdrings_cluster_dataframe["delta_phi_calib"],
+        hotCellEta=stdrings_cluster_dataframe["hotCellEta"],
+        hotCellPhi=stdrings_cluster_dataframe["hotCellPhi"],
+    )
 
 def set_quarter_rings_data(stdrings_cluster_dataframe:pd, qrings_cluster_dataframe:pd ,mode:str='delta'):
         
@@ -38,7 +46,7 @@ def set_quarter_rings_data(stdrings_cluster_dataframe:pd, qrings_cluster_datafra
             
             return dataset_preprocessing.calc_asym_weights(
                 qrings_cluster_dataframe.iloc[:, 0:378], 
-                stdrings_cluster_dataframe.iloc[:, 0:99]
+                stdrings_cluster_dataframe.iloc[:, 0:99],
             )
 
 
@@ -146,7 +154,7 @@ def prepare_and_split_data(
 def split_dataframe(data, params=None):
     
     if params is None:
-        return [data.reset_index(drop=True)]
+        return [data]
 
     result_list = []
     data_remaining = data.copy()
@@ -165,13 +173,13 @@ def split_dataframe(data, params=None):
 
         # Filtra e adiciona à lista de resultados
         filtered = data_remaining.loc[combined_mask]
-        result_list.append(filtered.reset_index(drop=True))
+        result_list.append(filtered)
 
         # Remove linhas já usadas
         data_remaining = data_remaining.loc[~combined_mask]
 
     # Adiciona o que sobrou
-    result_list.append(data_remaining.reset_index(drop=True))
+    result_list.append(data_remaining)
 
     return result_list
     
@@ -205,14 +213,12 @@ def _make_mask(column, values):
     if len(values) == 2 and all(isinstance(v, (int, float, type(None))) for v in values):
         min_val, max_val = values
 
-        # --- INÍCIO DA MODIFICAÇÃO SOLICITADA ---
         # Define a coluna a ser usada para comparação.
         # Se o nome da coluna for 'cluster_eta', usa seu valor absoluto.
         if column.name == 'cluster_eta':
             target_column = column.abs()
         else:
             target_column = column
-        # --- FIM DA MODIFICAÇÃO SOLICITADA ---
 
         if min_val is not None and max_val is not None:
             mask = (target_column >= min_val) & (target_column < max_val)
