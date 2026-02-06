@@ -5,6 +5,141 @@ from typing import List, Union, Dict, Callable, Optional, TypedDict, NotRequired
 from scipy import stats
 from matplotlib.axes import Axes
 
+# A type alias to handle both lists and dictionaries for bin edges
+BinsType = Union[List[Union[float, int]], Dict[str, List[Union[float, int]]]]
+
+def calculate_iqr(df: pd.DataFrame, y_test_col: str, y_pred_col: str) -> float:
+    """
+    Calculates the IQR of the test column or the ratio between test and prediction.
+
+    Args:
+        df (pd.DataFrame): The input DataFrame.
+        y_test_col (str): The name of the ground truth column.
+        y_pred_col (str): The name of the prediction column.
+
+    Returns:
+        float: The calculated Interquartile Range.
+    """
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError("The provided item is not a DataFrame.")
+    if y_test_col not in df.columns:
+        raise ValueError(f"Column '{y_test_col}' not found.")
+
+    if y_pred_col not in df.columns:
+        # Logic for when y_pred is not present
+        target_data = df[y_test_col]
+    else:
+        # Logic for the ratio of y_test / y_pred
+        ratio = df[y_test_col] / df[y_pred_col]
+        target_data = ratio.replace([np.inf, -np.inf], np.nan)
+        
+    return stats.iqr(target_data, axis=None, rng=(25, 75), scale=1.0, nan_policy='omit', interpolation='linear')
+
+def calculate_rmse(df: pd.DataFrame, y_test_col: str, y_pred_col: str) -> float:
+    """
+    Calculates the Root Mean Squared Error (RMSE).
+
+    Args:
+        df (pd.DataFrame): The input DataFrame.
+        y_test_col (str): The name of the ground truth column.
+        y_pred_col (str): The name of the prediction column.
+
+    Returns:
+        float: The calculated RMSE value.
+    """
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError("The provided item is not a DataFrame.")
+    if y_test_col not in df.columns or y_pred_col not in df.columns:
+        raise ValueError(f"For RMSE, both columns '{y_test_col}' and '{y_pred_col}' are required.")
+    
+    squared_errors = (df[y_test_col] - df[y_pred_col]) ** 2
+    return np.sqrt(squared_errors.mean())
+
+def calculate_mae(df: pd.DataFrame, y_test_col: str, y_pred_col: str) -> float:
+    """
+    Calculates the Mean Absolute Error (MAE).
+
+    Args:
+        df (pd.DataFrame): The input DataFrame.
+        y_test_col (str): The name of the ground truth column.
+        y_pred_col (str): The name of the prediction column.
+
+    Returns:
+        float: The calculated MAE value.
+    """
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError("The provided item is not a DataFrame.")
+    if y_test_col not in df.columns or y_pred_col not in df.columns:
+        raise ValueError(f"For MAE, both columns '{y_test_col}' and '{y_pred_col}' are required.")
+        
+    absolute_errors = (df[y_test_col] - df[y_pred_col]).abs()
+    return absolute_errors.mean()
+
+# Define the type for our metric functions for clarity
+MetricCallable = Callable[[pd.DataFrame, str, str], float]
+
+# This dictionary acts as a registry to select the desired metric function.
+METRIC_FUNCTIONS: Dict[str, MetricCallable] = {
+    'iqr': calculate_iqr,
+    'rmse': calculate_rmse,
+    'mae': calculate_mae,
+}
+
+
+def calculate_bin_centers(bins: BinsType) -> List[float]:
+    """
+    Calculates the center point for each interval defined by bin edges.
+
+    Args:
+        bins (BinsType): A list of bin edges (e.g., [0, 5, 10, 15]) or a
+                         dictionary containing such a list as a value.
+
+    Returns:
+        List[float]: A list of the calculated center points for each bin.
+    """
+    if isinstance(bins, dict):
+        if not bins:
+            raise ValueError("The 'bins' dictionary cannot be empty.")
+        # Use the first list of edges found in the dictionary's values
+        bin_edges = next(iter(bins.values()))
+    elif isinstance(bins, list):
+        bin_edges = bins
+    else:
+        raise TypeError("The 'bins' parameter must be a list of edges or a dictionary.")
+    
+    return [(bin_edges[i] + bin_edges[i-1]) / 2 for i in range(1, len(bin_edges))]
+
+def calculate_bin_half_widths(bins: BinsType) -> List[float]:
+    """
+    Calculates half the width of each bin from a list of bin edges.
+
+    Args:
+        bins (BinsType): A list of bin edges (e.g., [0, 5, 10, 15]) or a
+                         dictionary containing such a list as a value.
+
+    Returns:
+        List[float]: A list of the calculated half-widths for each bin.
+    """
+    if isinstance(bins, dict):
+        if not bins:
+            raise ValueError("The 'bins' dictionary cannot be empty.")
+        # Use the first list of edges found in the dictionary's values
+        bin_edges = next(iter(bins.values()))
+    elif isinstance(bins, list):
+        bin_edges = bins
+    else:
+        raise TypeError("The 'bins' parameter must be a list of edges or a dictionary.")
+
+    return [(bin_edges[i] - bin_edges[i-1]) / 2 for i in range(1, len(bin_edges))]
+
+# Define a specific type for the plot configuration dictionary for clarity
+class PlotConfig(TypedDict):
+    """A dictionary defining a plot series with required and optional keys."""
+    y_data: Union[list, np.ndarray]  # The y-values for the plot (Required)
+    label: NotRequired[str]             # The legend label for the series (Optional)
+    fmt: NotRequired[str]               # The marker format string (Optional)
+    color: NotRequired[str]             # The color of the series (Optional)
+
 def merge_dataframes(
     df1: pd.DataFrame, # X_test
     s: pd.Series,      # y_test
@@ -138,86 +273,6 @@ def parameters_filter(
     
     return result
 
-
-def calculate_iqr(df: pd.DataFrame, y_test_col: str, y_pred_col: str) -> float:
-    """
-    Calculates the IQR of the test column or the ratio between test and prediction.
-
-    Args:
-        df (pd.DataFrame): The input DataFrame.
-        y_test_col (str): The name of the ground truth column.
-        y_pred_col (str): The name of the prediction column.
-
-    Returns:
-        float: The calculated Interquartile Range.
-    """
-    if not isinstance(df, pd.DataFrame):
-        raise TypeError("The provided item is not a DataFrame.")
-    if y_test_col not in df.columns:
-        raise ValueError(f"Column '{y_test_col}' not found.")
-
-    if y_pred_col not in df.columns:
-        # Logic for when y_pred is not present
-        target_data = df[y_test_col]
-    else:
-        # Logic for the ratio of y_test / y_pred
-        ratio = df[y_test_col] / df[y_pred_col]
-        target_data = ratio.replace([np.inf, -np.inf], np.nan)
-        
-    return stats.iqr(target_data, axis=None, rng=(25, 75), scale=1.0, nan_policy='omit', interpolation='linear')
-
-def calculate_rmse(df: pd.DataFrame, y_test_col: str, y_pred_col: str) -> float:
-    """
-    Calculates the Root Mean Squared Error (RMSE).
-
-    Args:
-        df (pd.DataFrame): The input DataFrame.
-        y_test_col (str): The name of the ground truth column.
-        y_pred_col (str): The name of the prediction column.
-
-    Returns:
-        float: The calculated RMSE value.
-    """
-    if not isinstance(df, pd.DataFrame):
-        raise TypeError("The provided item is not a DataFrame.")
-    if y_test_col not in df.columns or y_pred_col not in df.columns:
-        raise ValueError(f"For RMSE, both columns '{y_test_col}' and '{y_pred_col}' are required.")
-    
-    squared_errors = (df[y_test_col] - df[y_pred_col]) ** 2
-    return np.sqrt(squared_errors.mean())
-
-def calculate_mae(df: pd.DataFrame, y_test_col: str, y_pred_col: str) -> float:
-    """
-    Calculates the Mean Absolute Error (MAE).
-
-    Args:
-        df (pd.DataFrame): The input DataFrame.
-        y_test_col (str): The name of the ground truth column.
-        y_pred_col (str): The name of the prediction column.
-
-    Returns:
-        float: The calculated MAE value.
-    """
-    if not isinstance(df, pd.DataFrame):
-        raise TypeError("The provided item is not a DataFrame.")
-    if y_test_col not in df.columns or y_pred_col not in df.columns:
-        raise ValueError(f"For MAE, both columns '{y_test_col}' and '{y_pred_col}' are required.")
-        
-    absolute_errors = (df[y_test_col] - df[y_pred_col]).abs()
-    return absolute_errors.mean()
-
-# Define the type for our metric functions for clarity
-MetricCallable = Callable[[pd.DataFrame, str, str], float]
-
-# This dictionary acts as a registry to select the desired metric function.
-METRIC_FUNCTIONS: Dict[str, MetricCallable] = {
-    'iqr': calculate_iqr,
-    'rmse': calculate_rmse,
-    'mae': calculate_mae,
-}
-
-# --- Step 3: Create the Main Orchestrator Function ---
-
 def evaluate_metrics(
     data: Union[pd.DataFrame, List[pd.DataFrame]],
     metric: str = 'iqr',
@@ -268,63 +323,6 @@ def evaluate_metrics(
             results.append(None)
             
     return results
-
-# A type alias to handle both lists and dictionaries for bin edges
-BinsType = Union[List[Union[float, int]], Dict[str, List[Union[float, int]]]]
-
-# Define a specific type for the plot configuration dictionary for clarity
-class PlotConfig(TypedDict):
-    """A dictionary defining a plot series with required and optional keys."""
-    y_data: Union[list, np.ndarray]  # The y-values for the plot (Required)
-    label: NotRequired[str]             # The legend label for the series (Optional)
-    fmt: NotRequired[str]               # The marker format string (Optional)
-    color: NotRequired[str]             # The color of the series (Optional)
-
-def calculate_bin_centers(bins: BinsType) -> List[float]:
-    """
-    Calculates the center point for each interval defined by bin edges.
-
-    Args:
-        bins (BinsType): A list of bin edges (e.g., [0, 5, 10, 15]) or a
-                         dictionary containing such a list as a value.
-
-    Returns:
-        List[float]: A list of the calculated center points for each bin.
-    """
-    if isinstance(bins, dict):
-        if not bins:
-            raise ValueError("The 'bins' dictionary cannot be empty.")
-        # Use the first list of edges found in the dictionary's values
-        bin_edges = next(iter(bins.values()))
-    elif isinstance(bins, list):
-        bin_edges = bins
-    else:
-        raise TypeError("The 'bins' parameter must be a list of edges or a dictionary.")
-    
-    return [(bin_edges[i] + bin_edges[i-1]) / 2 for i in range(1, len(bin_edges))]
-
-def calculate_bin_half_widths(bins: BinsType) -> List[float]:
-    """
-    Calculates half the width of each bin from a list of bin edges.
-
-    Args:
-        bins (BinsType): A list of bin edges (e.g., [0, 5, 10, 15]) or a
-                         dictionary containing such a list as a value.
-
-    Returns:
-        List[float]: A list of the calculated half-widths for each bin.
-    """
-    if isinstance(bins, dict):
-        if not bins:
-            raise ValueError("The 'bins' dictionary cannot be empty.")
-        # Use the first list of edges found in the dictionary's values
-        bin_edges = next(iter(bins.values()))
-    elif isinstance(bins, list):
-        bin_edges = bins
-    else:
-        raise TypeError("The 'bins' parameter must be a list of edges or a dictionary.")
-
-    return [(bin_edges[i] - bin_edges[i-1]) / 2 for i in range(1, len(bin_edges))]
 
 def plot_errorbars(
     plot_configs: List[PlotConfig],

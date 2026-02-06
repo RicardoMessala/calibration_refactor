@@ -17,7 +17,7 @@ def calc_sv(e237, e277, rings):
 # Novo def CalcRings(rings, cluster_eta, cluster_phi, delta_eta_calib, delta_phi_calib, hotCellEta, hotCellPhi,):
 # será usado tanto pra o defaults do std rings quanto do quarter rings
 
-def _get_rings_default(data: pd.DataFrame, columns: Optional[List[List[str]]] = None) -> pd.DataFrame:
+def _get_rings_default(dataframe: pd.DataFrame, columns: Optional[List[List[str]]] = None) -> pd.DataFrame:
     """
     Processa o DataFrame 'data' selecionando colunas com base em uma lista
     de nomes de colunas. Se 'rings_columns' for None ou uma lista vazia, 
@@ -37,14 +37,15 @@ def _get_rings_default(data: pd.DataFrame, columns: Optional[List[List[str]]] = 
     # Verifica se rings_columns é None ou uma lista vazia.
     # Se for o caso, retorna o DataFrame original sem modificações.
     if not columns:
-        return data
+        print('new_processing_print',list(dataframe.columns))
+        return dataframe
 
     # Achata a lista de listas em uma única lista com todos os nomes das colunas.
     columns_to_select = [name for group in columns for name in group]
     
     # Seleciona todas as colunas de uma vez usando seus nomes.
     # Isso é mais eficiente do que selecionar e concatenar partes separadas.
-    return data[columns_to_select]
+    return dataframe[columns_to_select]
    
 def calc_asym_weights_delta(
     quarter_rings_original: pd.DataFrame,
@@ -54,9 +55,9 @@ def calc_asym_weights_delta(
 ) -> pd.DataFrame:
     
     # 1. Filtragem dos dados (esta parte está correta)
-    filtered_qr = _get_rings_default(data=quarter_rings_original, columns=rings_columns)
-    filtered_std = _get_rings_default(data=std_rings_original, columns=rings_columns)
-    clusters = _get_rings_default(data=quarter_rings_original, columns=clusters_columns)
+    filtered_qr = _get_rings_default(dataframe=quarter_rings_original, columns=rings_columns)
+    filtered_std = _get_rings_default(dataframe=std_rings_original, columns=rings_columns)
+    clusters = _get_rings_default(dataframe=quarter_rings_original, columns=clusters_columns)
 
     # 2. Lógica de cálculo (correta, mas dependente da ordem das colunas)
     phi_p_eta_p = filtered_qr.iloc[:, 0::4]

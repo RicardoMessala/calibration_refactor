@@ -5,104 +5,146 @@ from typing import List, Tuple, Optional, Union, Literal, Dict, Type, Callable
 from database.dataset import new_processing
 from abc import ABC, abstractmethod
 
-# Assuming 'dataset_preprocessing' is an imported module
-# import dataset_preprocessing
+# --- 1. Decorator para o Dispatcher de Métodos ---
+def data_handler(model_name: str):
+    """
+    Decorador para marcar um método de instância como um handler.
+    Ex: @data_handler("default") registra o método para ser chamado quando model="default".
+    """
+    def decorator(func: Callable) -> Callable:
+        func._handler_model_name = model_name
+        return func
+    return decorator
 
-# --- Step 1: Define Strategies (Concrete Products) ---
-class DataPreparationStrategy(ABC):
-    """Interface for all data preparation strategies."""
-    @abstractmethod
-    def feature_modeling(self, df: pd.DataFrame, model:str = 'default', **kwargs) -> pd.DataFrame:
-        """Prepares the data according to a specific strategy."""
-        pass
+
+class DataPreparationStrategy():
+    """
+    Classe Híbrida:
+    1. Atua como Factory de subclasses (baseado em 'name').
+    2. Atua como Dispatcher de métodos de instância (baseado em @data_handler).
+    """
+
+    # --- Lógica de Factory (Classe/Estática) ---
+    
+    # Registro de subclasses conhecidas (Topologias)
+    _strategies: Dict[str, Type['DataPreparationStrategy']] = {}
+    
+    # Nome identificador da subclasse (deve ser sobrescrito pelas subclasses)
+    name: Optional[str] = None 
+
+    def __init_subclass__(cls, **kwargs):
+        """
+        Auto-registro: Chamado automaticamente quando uma classe herda desta.
+        Registra a classe no dicionário _strategies se ela tiver um 'name'.
+        """
+        super().__init_subclass__(**kwargs)
+        
+        if hasattr(cls, 'name') and cls.name:
+            cls._strategies[cls.name] = cls
+
+    @classmethod
+    def create_topology(cls, topology: str) -> 'DataPreparationStrategy':
+        """
+        Factory Method: Retorna uma INSTÂNCIA da estratégia correspondente ao nome da topologia.
+        """
+        strategy_class = cls._strategies.get(topology)
+        
+        if not strategy_class:
+            valid_keys = list(cls._strategies.keys())
+            raise ValueError(
+                f"Topologia '{topology}' não encontrada. "
+                f"Disponíveis: {valid_keys}"
+            )
+        
+        return strategy_class()
+
+    @classmethod
+    def get_available_topologies(cls) -> List[str]:
+        """Retorna lista de topologias registradas."""
+        return list(cls._strategies.keys())
+
+
+    # --- Lógica de Dispatcher (Instância) ---
+
+    def __init__(self):
+        """
+        Ao instanciar, varremos os próprios métodos para encontrar
+        aqueles marcados com @data_handler.
+        """
+        self._model_handlers: Dict[str, Callable[..., pd.DataFrame]] = {}
+        self._register_handlers_automatically()
+
+    def _register_handlers_automatically(self) -> None:
+        """Introspecção para registrar métodos decorados."""
+        for attribute_name in dir(self):
+            method = getattr(self, attribute_name)
+            
+            # Verifica se é um método e se tem o metadado do decorator
+            if callable(method) and hasattr(method, "_handler_model_name"):
+                model_key = method._handler_model_name
+                self._model_handlers[model_key] = method
+
+    def register_handler(self, model_name: str, handler: Callable[..., pd.DataFrame]) -> None:
+        """
+        Permite registrar um novo handler dinamicamente após a instanciação (Runtime).
+        Útil para injetar lógica customizada sem precisar criar uma nova subclasse.
+        """
+        if not callable(handler):
+            raise TypeError(f"O handler para '{model_name}' deve ser chamável.")
+        self._model_handlers[model_name] = handler
+
+    def feature_modeling(self, df: pd.DataFrame, model: str = 'default', **kwargs) -> pd.DataFrame:
+        """
+        Executa o handler específico registrado na instância.
+        """
+        handler = self._model_handlers.get(model)
+        
+        if not handler:
+            valid_models = list(self._model_handlers.keys())
+            raise ValueError(
+                f"Modelo '{model}' não suportado pela estratégia '{self.name}'. "
+                f"Modelos disponíveis nesta estratégia: {valid_models}"
+            )
+            
+        return handler(df, **kwargs)
+
+
+# --- Implementações Concretas (Topologias) ---
 
 class RawDataPreparation(DataPreparationStrategy):
-    """Strategy for preparing data in the 'raw' format."""
-    def feature_modeling(self, df: pd.DataFrame, model:str = 'default', **kwargs) -> pd.DataFrame:
-        print("Processing raw data...")
-        # Original logic would go here
-        return df[['cluster_et', 'cluster_eta']].head() # Mock implementation
+    """Estratégia para dados 'raw'."""
+    name = 'raw'  # Chave para o Factory .create('raw')
+    
+    @data_handler("default") # Chave para o Dispatcher .feature_modeling(..., model='default')
+    def process_raw_head(self, dataframe: pd.DataFrame, **kwargs) -> pd.DataFrame:
+        print(f"[{self.name}] Executando lógica Raw Default...")
+        return new_processing._get_rings_default(dataframe)
+
 
 class StdRingsDataPreparation(DataPreparationStrategy):
-    """Strategy for preparing data in the 'std_rings' format."""
-    def __init__(self):
-        self._model_handlers: Dict[str, Callable[[pd.DataFrame], pd.DataFrame]] = {
-            'default': self._default_model,
+    """Estratégia para dados 'std_rings'."""
+    name = 'std_rings'
 
-            # More models can be registered here in the future
-        }
+    @data_handler("default")
+    def standard_logic(self, dataframe: pd.DataFrame, **kwargs) -> pd.DataFrame:
+        print(f"[{self.name}] Executando lógica Standard Rings...")
+        return dataframe.iloc[:, 0:10].head()
 
-    def feature_modeling(self, df: pd.DataFrame, model:str = 'default', **kwargs) -> pd.DataFrame:
-        """Prepares the data by dispatching to the correct model handler."""
-        handler = self._model_handlers.get(model)
-        if not handler:
-            raise ValueError(f"Unknown model '{model}' for StdRingsDataPreparation. "
-                             f"Valid models are {list(self._model_handlers.keys())}.")
-        return handler(df, **kwargs)
-
-    def _default_model(self, df: pd.DataFrame, **kwargs) -> pd.DataFrame:
-        """Handles the default preparation logic for std_rings."""
-        # Original logic would go here
-        return df.iloc[:, 0:10].head() # Mock implementation
 
 class QuarterRingsDataPreparation(DataPreparationStrategy):
-    """Strategy for preparing data in the 'quarter_rings' format."""
-    def __init__(self):
-        self._model_handlers: Dict[str, Callable[[pd.DataFrame], pd.DataFrame]] = {
-            'default': self._default_model,
-            'delta': self._delta_model,
+    """Estratégia para dados 'quarter_rings'."""
+    name = 'quarter_rings'
 
-            # More models can be registered here in the future
-        }
-
-    def feature_modeling(self, df: pd.DataFrame,  model:str = 'default', **kwargs) -> pd.DataFrame:
-        """Prepares the data by dispatching to the correct model handler."""
-        handler = self._model_handlers.get(model)
-        if not handler:
-            raise ValueError(f"Unknown model '{model}' for QuarterRingsDataPreparation. "
-                             f"Valid models are {list(self._model_handlers.keys())}.")
-        return handler(df, **kwargs)
-
-    def _default_model(self, df: pd.DataFrame, **kwargs) -> pd.DataFrame:
-        """Handles the default preparation logic for std_rings."""
-        # Original logic would go here
-        return df.iloc[:, 0:10].head() # Mock implementation
+    @data_handler("default")
+    def quarter_logic_main(self, dataframe: pd.DataFrame, **kwargs) -> pd.DataFrame:
+        print(f"[{self.name}] Executando Quarter Rings (Main)...")
+        return dataframe.iloc[:, 0:10].head()
     
-    def _delta_model(self, df: pd.DataFrame, **kwargs) -> pd.DataFrame:
-        """Handles the 'delta' preparation logic for quarter_rings."""
-        # Original logic would go here
-        return df.iloc[:, 0:10].head() # Mock implementation
+    @data_handler("delta")
+    def quarter_logic_delta(self, dataframe: pd.DataFrame, **kwargs) -> pd.DataFrame:
+        print(f"[{self.name}] Executando Quarter Rings (Delta)...")
+        return dataframe.iloc[:, 0:5].head()
 
-# --- Step 2: Create a Simplified Factory ---
-class DataPreparationFactory:
-    """
-    A Simple Factory that creates the correct data preparation strategy.
-    It uses a dictionary to be easily extensible (following the Open/Closed Principle).
-    """
-    def __init__(self):
-        self._topologies: Dict[str, Type[DataPreparationStrategy]] = {
-            'raw': RawDataPreparation,
-            'std_rings': StdRingsDataPreparation,
-            'quarter_rings': QuarterRingsDataPreparation,
-        }
-
-    def register_topology(self, topology: str, topology_class: Type[DataPreparationStrategy]):
-        """Allows for dynamically registering new strategies."""
-        self._topologies[topology] = topology_class
-
-    def set_topology(self, topology: str) -> DataPreparationStrategy:
-        """
-        Creates an instance of the requested strategy.
-        Additional arguments (kwargs) are passed to the strategy's constructor.
-        """
-        topology_class = self._topologies.get(topology)
-        if not topology_class:
-            raise ValueError(
-                f"Unknown input type: '{topology}'. "
-                f"Valid values are {list(self._topologies.keys())}."
-            )
-        # Passes arguments (e.g., model) to the strategy's constructor
-        return topology_class()
 
 # --- Step 3: Create a Unified Builder/Facade Class ---
 class DataBuilder:
@@ -111,9 +153,9 @@ class DataBuilder:
     of data preparation and splitting.
     """
     def __init__(self, dataframe: pd.DataFrame, alpha: Union[list, pd.Series, None] = None):
+        self._topology_factory = DataPreparationStrategy()
         self.dataframe = dataframe
-        self.alpha = self._set_alpha(alpha) # Defines the target only once
-        self._topology_factory = DataPreparationFactory()
+        # self.alpha = self._set_alpha(alpha) # Defines the target only once
 
         # State attributes, explicitly initialized
         self.X_train: Optional[pd.DataFrame] = None
@@ -138,23 +180,77 @@ class DataBuilder:
             return pd.Series(alpha, index=self.dataframe.index, name='alpha')
         raise TypeError(f"Unsupported type for alpha: {type(alpha).__name__}")
 
-    def _get_features(self, topology: str, model:str='default', **kwargs) -> pd.DataFrame:
+    def _get_features(self, dataframe:pd.DataFrame, topology:str='std_rings', model:str='default', **kwargs) -> pd.DataFrame:
         """Private method to generate features using the factory and a strategy."""
-        topology_class = self._topology_factory.set_topology(topology)
+        topology_class = self._topology_factory.create_topology(topology)
         # Ensures 'alpha' is not passed to the feature preparation step
-        features_df = self.dataframe.drop(columns=['alpha'], errors='ignore')
+        features_df = dataframe.drop(columns=['alpha'], errors='ignore')
         return topology_class.feature_modeling(features_df, model, **kwargs)
 
-    def _split_data(self, features: pd.DataFrame, train_size: float, random_state: Optional[int]) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+    def _split_data(self, dataframe: pd.DataFrame, features: pd.DataFrame, train_size: float, random_state: Optional[int]) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
         """Private method for splitting the data."""
         # Ensures that the index of y (alpha) is aligned with X (features)
-        aligned_target = self.alpha.loc[features.index]
+        aligned_target = dataframe['alpha'].loc[features.index]
+        # print('aligned', aligned_target)
+        # print('out aligned')
         return sklearn.model_selection.train_test_split(
             features,
             aligned_target,
             train_size=train_size,
             random_state=random_state
         )
+    
+    def _split_by_bins(self, bins_size=None):
+        """
+        Splits a DataFrame into multiple DataFrames based on a list of conditions.
+        """
+        if bins_size is None:
+            self.dataframe = [self.dataframe]
+
+        else:
+            result_list = []
+            data_remaining = self.dataframe.copy()
+
+            for group_conditions in bins_size:
+                masks = []
+                for condition_dict in group_conditions:
+                    for col_name, intervals in condition_dict.items():
+                        masks.append(self._make_mask(data_remaining[col_name], intervals))
+
+                if masks:
+                    combined_mask = np.logical_and.reduce(masks)
+                else:
+                    combined_mask = np.zeros(len(data_remaining), dtype=bool)
+
+                filtered = data_remaining.loc[combined_mask]
+                result_list.append(filtered)
+                data_remaining = data_remaining.loc[~combined_mask]
+
+                result_list.append(data_remaining)
+            self.dataframe = result_list
+
+
+
+    def _make_mask(self, column, values):
+        """
+        Creates a boolean mask from a pandas Series.
+        """
+        values = list(values)
+        if len(values) == 2 and all(isinstance(v, (int, float, type(None))) for v in values):
+            min_val, max_val = values
+            target_column = column.abs() if column.name == 'cluster_eta' else column
+            
+            if min_val is not None and max_val is not None:
+                mask = (target_column >= min_val) & (target_column < max_val)
+            elif min_val is not None:
+                mask = target_column >= min_val
+            elif max_val is not None:
+                mask = target_column < max_val
+            else:
+                mask = pd.Series(True, index=column.index)
+        else:
+            mask = column.isin(values)
+        return mask.to_numpy()
 
     def run(
         self,
@@ -162,77 +258,36 @@ class DataBuilder:
         train_size: float = 0.7,
         random_state: Optional[int] = None,
         model: Optional[str] = 'default',
+        bins_size: Optional[dict] = None,
         **kwargs,
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
         """
         Orchestrates feature generation and data splitting, updating the builder's state.
         """
-        # 1. Generate features
-        features = self._get_features(topology=topology, model=model, **kwargs)
 
-        # 2. Split data
-        result = self._split_data(
-            features=features,
-            train_size=train_size,
-            random_state=random_state
-        )
+        "check se dataframe é array se não for transformar. executar run com um for aqui dentreo que serra append em result"
+        result=[]
+        self._split_by_bins(bins_size)
+        for dataframe in self.dataframe:
+            # 1. Generate features
+            # print('dentro do loop',dataframe)
+            # print('linha seguinte')
+            features = self._get_features(dataframe=dataframe,topology=topology, model=model, **kwargs)
 
-        # 3. Update the builder's state
-        self.X_train, self.X_test, self.y_train, self.y_test = result
+            # 2. Split data
+            self.X_train, self.X_test, self.y_train, self.y_test = self._split_data(
+                dataframe=dataframe,
+                features=features,
+                train_size=train_size,
+                random_state=random_state
+            )
+
+            # 3. Update the builder's state
+            result.append([self.X_train, self.X_test, self.y_train, self.y_test])
         return result
 
 
 # --- Utility functions ---
-
-def _split_by_bins(data, params=None):
-    """
-    Splits a DataFrame into multiple DataFrames based on a list of conditions.
-    """
-    if params is None:
-        return [data]
-    
-    result_list = []
-    data_remaining = data.copy()
-
-    for group_conditions in params:
-        masks = []
-        for condition_dict in group_conditions:
-            for col_name, intervals in condition_dict.items():
-                masks.append(_make_mask(data_remaining[col_name], intervals))
-
-        if masks:
-            combined_mask = np.logical_and.reduce(masks)
-        else:
-            combined_mask = np.zeros(len(data_remaining), dtype=bool)
-
-        filtered = data_remaining.loc[combined_mask]
-        result_list.append(filtered)
-        data_remaining = data_remaining.loc[~combined_mask]
-
-    result_list.append(data_remaining)
-    return result_list
-
-
-def _make_mask(column, values):
-    """
-    Creates a boolean mask from a pandas Series.
-    """
-    values = list(values)
-    if len(values) == 2 and all(isinstance(v, (int, float, type(None))) for v in values):
-        min_val, max_val = values
-        target_column = column.abs() if column.name == 'cluster_eta' else column
-        
-        if min_val is not None and max_val is not None:
-            mask = (target_column >= min_val) & (target_column < max_val)
-        elif min_val is not None:
-            mask = target_column >= min_val
-        elif max_val is not None:
-            mask = target_column < max_val
-        else:
-            mask = pd.Series(True, index=column.index)
-    else:
-        mask = column.isin(values)
-    return mask.to_numpy()
 
 def _set_data_to_plot(
     df1: pd.DataFrame = None, # X_test
