@@ -4,9 +4,10 @@ venv/
 # Ignore folders
 database/data/
 
-# Python cache
+# Python bytecode
 __pycache__/
 *.py[cod]
+*$py.class
 
 # VS Code
 .vscode/
