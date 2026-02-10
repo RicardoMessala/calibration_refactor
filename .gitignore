@@ -8,8 +8,8 @@ database/data/
 __pycache__/
 *.py[cod]
 
-# Jupyter
-.ipynb_checkpoints/
+# # Jupyter
+# .ipynb_checkpoints/
 
 # VS Code
 .vscode/
