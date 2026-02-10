@@ -8,14 +8,10 @@ database/data/
 __pycache__/
 *.py[cod]
 
-# # Jupyter
-# .ipynb_checkpoints/
-
 # VS Code
 .vscode/
 
 # Ignore files
-.env
 to_do.txt
 
 # Logs
