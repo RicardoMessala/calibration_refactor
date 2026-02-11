@@ -193,6 +193,7 @@ class PlotConfig():
         self.dataframe = dataframe
         self.parameters_filtered: List[Union[pd.DataFrame, pd.Series]] = []
         self.bins: Dict[str, List[float]]= bins
+        self.intervals: List = []
         self.cols: Union[str, List[str], None] = None
         self.metrics: List[Optional[float]] = []
 
@@ -296,8 +297,8 @@ class PlotConfig():
             # Cria uma lista de intervalos estendida para incluir os casos fora dos limites
             # Ex: [10, 20] se torna [-inf, 10, 20, inf]
             extended_intervals = [-np.inf] + sorted(intervals) + [np.inf]
-            print(len(extended_intervals))
-            print(extended_intervals)
+            # print(len(extended_intervals))
+            # print(extended_intervals)
             # --- BLOCO UNIFICADO ---
             # Itera sobre os pares de intervalos (ex: (-inf, 10), (10, 20), (20, inf))
             for i in range(1, len(extended_intervals)):
@@ -318,11 +319,10 @@ class PlotConfig():
 
                 # A máscara final considera apenas as linhas que ainda não foram atribuídas
                 final_mask = interval_mask & unassigned_mask
-                
                 if final_mask.any():
                     filtered_df = data[final_mask].dropna().reset_index(drop=True)
                     if not filtered_df.empty:
-                        print('filtered_mask shape: ', filtered_df.shape, 'lower_bound: ', lower_bound, 'upper_bound: ', upper_bound)
+                        # print('filtered_mask shape: ', filtered_df.shape, 'lower_bound: ', lower_bound, 'upper_bound: ', upper_bound)
                         # Adiciona o resultado filtrado à lista
                         if isinstance(self.cols, str):
                             self.parameters_filtered.append(filtered_df[self.cols])
@@ -333,9 +333,13 @@ class PlotConfig():
                         
                         # Marca as linhas como "atribuídas" para não serem usadas novamente
                         unassigned_mask[final_mask] = False
-                    else:
-                        print('filtered_mask esta vazia nos intervalos: ', 'lower_bound: ', lower_bound, 'upper_bound: ', upper_bound)
+                        self.intervals.append(lower_bound)
+                        self.intervals.append(upper_bound)
+                    # else:
+                    #     print('filtered_mask esta vazia nos intervalos: ', 'lower_bound: ', lower_bound, 'upper_bound: ', upper_bound)
         
+        self.intervals=np.unique(self.intervals).tolist()
+        # print(self.intervals)
         return self.parameters_filtered
 
     def _set_plot(self):
@@ -363,7 +367,6 @@ class PlotConfig():
         legend_fontsize: int = 8,
         xscale: str = 'linear',
         yscale: str = 'linear',
-        *args
     ) -> None:
         """
         Creates a single-panel plot with error bars.
@@ -380,8 +383,8 @@ class PlotConfig():
         """
 
         # 0. Calculate x-axis data and errors from the list of bin edges
-        x_data = calculate_bin_centers(self.bins)
-        x_err = calculate_bin_half_widths(self.bins)
+        x_data = calculate_bin_centers(self.intervals)
+        x_err = calculate_bin_half_widths(self.intervals)
 
         # 1. Set up the figure with a single subplot
         fig, ax = plt.subplots()
