@@ -290,7 +290,7 @@ class PlotConfig():
         list[pd.DataFrame] or list[pd.Series]
             List of filtered objects according to the bins.
         """
-        
+        parameters_filtered =[]
         unassigned_mask = pd.Series(True, index=data.index)
 
         for col, intervals in self.bins.items():
@@ -325,11 +325,11 @@ class PlotConfig():
                         # print('filtered_mask shape: ', filtered_df.shape, 'lower_bound: ', lower_bound, 'upper_bound: ', upper_bound)
                         # Adiciona o resultado filtrado à lista
                         if isinstance(self.cols, str):
-                            self.parameters_filtered.append(filtered_df[self.cols])
+                            parameters_filtered.append(filtered_df[self.cols])
                         elif isinstance(self.cols, list):
-                            self.parameters_filtered.append(filtered_df[self.cols])
+                            parameters_filtered.append(filtered_df[self.cols])
                         else:
-                            self.parameters_filtered.append(filtered_df)
+                            parameters_filtered.append(filtered_df)
                         
                         # Marca as linhas como "atribuídas" para não serem usadas novamente
                         unassigned_mask[final_mask] = False
@@ -340,7 +340,7 @@ class PlotConfig():
         
         self.intervals=np.unique(self.intervals).tolist()
         # print(self.intervals)
-        return self.parameters_filtered
+        return parameters_filtered
 
     def _set_plot(self):
         parameters_filtered = []
@@ -351,7 +351,7 @@ class PlotConfig():
         for opt in self.optimization:
             data = self._build_dataframe_to_plot(opt)
             parameters_filtered.append(self._parameters_filter(data))
-
+        
         return parameters_filtered 
 
 
@@ -392,7 +392,8 @@ class PlotConfig():
         
         # O zip combina 'data_metric' e 'config_metric' par a par
         for data, config in zip(data_metric, plot_configs):
-
+            print(len(data_metric))
+            print(len(data))
             # Chamada da função de avaliação
     
             y_data = evaluate_metrics(
