@@ -297,9 +297,7 @@ class PlotConfig():
             # Cria uma lista de intervalos estendida para incluir os casos fora dos limites
             # Ex: [10, 20] se torna [-inf, 10, 20, inf]
             extended_intervals = [-np.inf] + sorted(intervals) + [np.inf]
-            # print(len(extended_intervals))
-            # print(extended_intervals)
-            # --- BLOCO UNIFICADO ---
+
             # Itera sobre os pares de intervalos (ex: (-inf, 10), (10, 20), (20, inf))
             for i in range(1, len(extended_intervals)):
                 lower_bound = extended_intervals[i - 1]
@@ -392,8 +390,6 @@ class PlotConfig():
         
         # O zip combina 'data_metric' e 'config_metric' par a par
         for data, config in zip(data_metric, plot_configs):
-            print(len(data_metric))
-            print(len(data))
             # Chamada da função de avaliação
     
             y_data = evaluate_metrics(
