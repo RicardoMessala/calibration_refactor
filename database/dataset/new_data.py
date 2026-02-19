@@ -173,23 +173,6 @@ class DataBuilder:
         self.y_train: Optional[pd.Series] = None
         self.y_test: Optional[pd.Series] = None
 
-    def _set_alpha(self, alpha: Union[list, pd.Series, None]) -> pd.Series:
-        """Private method to validate and format the target variable."""
-        if alpha is None:
-            if "alpha" not in self.dataframe.columns:
-                raise ValueError("If 'alpha' is None, an 'alpha' column must exist in the dataframe.")
-            return self.dataframe["alpha"]
-        if isinstance(alpha, pd.Series):
-            return alpha
-        if isinstance(alpha, list):
-            if len(alpha) != len(self.dataframe):
-                raise ValueError(
-                    f"The length of the alpha list ({len(alpha)}) must be equal to "
-                    f"the length of the dataframe ({len(self.dataframe)})."
-                )
-            return pd.Series(alpha, index=self.dataframe.index, name='alpha')
-        raise TypeError(f"Unsupported type for alpha: {type(alpha).__name__}")
-
     def _get_features(self, dataframe:pd.DataFrame, topology:str='std_rings', model:str='default', **kwargs) -> pd.DataFrame:
         """Private method to generate features using the factory and a strategy."""
         topology_class = self._topology_factory.create_topology(topology)
