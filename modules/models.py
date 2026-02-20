@@ -144,22 +144,35 @@ class LGBMTraining:
 
 
 class XGBoostTraining: # Define a classe que vai gerenciar o treinamento
-    def __init__(self, 
-        X_train: Union[np.ndarray, pd.DataFrame], # Aceita Array ou DataFrame
-        X_test: Union[np.ndarray, pd.DataFrame],
-        y_train: ArrayLike, # Aceita qualquer tipo de lista numérica
-        y_test: ArrayLike):
+    def __init__(self, dados):
+        self.dados = dados
 
-        # Guarda os dados dentro do objeto (self) para que possam ser usados
-        # pelos métodos train() e predict() sem precisar passá-los de novo.
-        self.X_train = X_train
-        self.X_test = X_test
-        self.y_train = y_train
-        self.y_test = y_test
+        self.X_train = None
+        self.X_test = None
+        self.y_train = None
+        self.y_test = None
         
-        # Inicializa a variável do modelo como Vazia (None).
-        # Isso serve para verificarmos depois se o treino já aconteceu.
-        self.model = None
+        self._processar_dados()
+
+    
+    def _processar_dados(self):
+
+
+        a = []
+        b = []
+        c = []
+        d = []
+
+        for gaveta in self.dados:
+            a.append(gaveta[0])
+            b.append(gaveta[1])
+            c.append(gaveta[2])
+            d.append(gaveta[3])
+
+        self.X_train = pd.concat(a, axis=0)
+        self.X_test  = pd.concat(b, axis=0)
+        self.y_train = pd.concat(c, axis=0)
+        self.y_test  = pd.concat(d, axis=0)
             
         
 
