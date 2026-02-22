@@ -5,6 +5,16 @@ from typing import List, Optional
 # Metodos para atributos dos rings - Apenas criar novas def
 # Function to compute the relevant variables
 
+layers = {
+    "PS":  {"rings": list(range(0, 8)),   "qrings": list(range(0, 29))},
+    "EM1": {"rings": list(range(8, 72)),  "qrings": list(range(29, 282))},
+    "EM2": {"rings": list(range(72, 80)), "qrings": list(range(282, 311))},
+    "EM3": {"rings": list(range(80, 88)), "qrings": list(range(311, 340))},
+    "H1":  {"rings": list(range(88, 92)), "qrings": list(range(340, 353))},
+    "H2":  {"rings": list(range(92, 96)), "qrings": list(range(353, 366))},
+    "H3":  {"rings": list(range(96, 100)),"qrings": list(range(366, 379))},
+}
+
 def calc_sv(e237, e277, rings):
 	Reta = e237/e277
 	E_E1E2 = rings.iloc[:,8:72].sum(axis=1)/rings.iloc[:,72:80].sum(axis=1)
@@ -102,38 +112,111 @@ def calc_asym_weights_delta(
 
     return final_rings
 
-# # --- COMO CHAMAR A FUNÇÃO ---
+def normalize_qrings(df,layers):
+    for layer in layers.keys():
+        
+        rings = layers[layer]["rings"]
+        qrings = layers[layer]["qrings"]
 
-# # 1. Crie um DataFrame de exemplo (similar ao seu 'rings')
-# #    Vamos supor que as colunas são nomeadas 'ring_0', 'ring_1', etc.
-# num_cols = 100
-# col_names = [f'ring_{i}' for i in range(num_cols)]
-# sample_data = pd.DataFrame([[i for i in range(num_cols)]], columns=col_names)
+        for i in range(1, len(rings)):
 
-# # 2. Defina os grupos de colunas pelos NOMES, replicando a lógica do seu código antigo
-# #    Antigo: RingsPS  = rings.iloc[:,0:4]
-# rings_ps_cols = [f'ring_{i}' for i in range(0, 4)]
+            std = df[f"StdRings_{rings[i]}"]
+            qr_cols = [f"QuarterRings_{j}" for j in range(qrings[4*i-3], qrings[4*i]+1)]
+            df.loc[:, qr_cols] = (
+                df[qr_cols]
+                .div(std.abs(), axis=0)
+                .where(std.ne(0), 0)
+            )
 
-# #    Antigo: RingsEM1 = rings.iloc[:,8:41]
-# rings_em1_cols = [f'ring_{i}' for i in range(8, 41)]
+    return df
 
-# #    Antigo: RingsEM2 = rings.iloc[:,72:76]
-# rings_em2_cols = [f'ring_{i}' for i in range(72, 76)]
+def diff_qrings_energy(df, layers):
+    # 1. Criamos um dicionário para armazenar todas as novas colunas
+    new_cols = {}
 
-# #    Antigo: RingsEM3 = rings.iloc[:,80:84]
-# rings_em3_cols = [f'ring_{i}' for i in range(80, 84)]
+    for layer in layers.keys():
+        qrings = layers[layer]["qrings"]
+        rings = layers[layer]["rings"]
 
-# #    Antigo: RingsHD  = rings.iloc[:,88:94]
-# rings_hd_cols = [f'ring_{i}' for i in range(88, 94)]
+        for i in range(1, len(rings)):
+            # Definindo os nomes das colunas de origem
+            q1 = f"QuarterRings_{qrings[4*i-3]}"
+            q2 = f"QuarterRings_{qrings[4*i-2]}"
+            q3 = f"QuarterRings_{qrings[4*i-1]}"
+            q4 = f"QuarterRings_{qrings[4*i]}"
 
-# # Junte todos os grupos em uma única lista de listas
-# all_column_groups = [
-#     rings_ps_cols,
-#     rings_em1_cols,
-#     rings_em2_cols,
-#     rings_em3_cols,
-#     rings_hd_cols
-# ]
+            # 2. Em vez de df[novo] = ..., guardamos no dicionário
+            name_1_3 = f"diff_QuarterRings_{qrings[4*i-3]}_{qrings[4*i-1]}"
+            name_2_4 = f"diff_QuarterRings_{qrings[4*i-2]}_{qrings[4*i]}"
+            
+            new_cols[name_1_3] = df[q1] - df[q3]
+            new_cols[name_2_4] = df[q2] - df[q4]
 
-# # 3. Chame a nova função com o DataFrame e a lista de nomes de colunas
-# processed_rings = process_rings_default(sample_data, all_column_groups)
+    # 3. Concatenamos todas as novas colunas de uma vez só ao final
+    # axis=1 significa concatenar colunas (horizontalmente)
+    df = pd.concat([df, pd.DataFrame(new_cols, index=df.index)], axis=1)
+
+    return df
+
+def vectorize_rings_energy(df, layers):
+    new_cols = {}
+    
+    for layer in layers.keys():
+        rings = layers[layer]["rings"]
+        qrings = layers[layer]["qrings"]
+
+        for i in range(1, len(rings)):
+            # Nomes das colunas de diferença (calculadas no passo anterior)
+            col_dx = f"diff_QuarterRings_{qrings[4*i-2]}_{qrings[4*i]}"
+            col_dy = f"diff_QuarterRings_{qrings[4*i-3]}_{qrings[4*i-1]}"
+            
+            dx = df[col_dx]
+            dy = df[col_dy]
+
+            # Módulo do vetor usando a hipotenusa
+            mod_name = f"vec_mod_{rings[i]}"
+            new_cols[mod_name] = np.hypot(dx, dy)
+
+            # Ângulo em radianos ou graus
+            ang_name = f"vec_ang_{rings[i]}"
+            # np.arctan2 já lida com a divisão por zero e quadrantes corretamente
+            new_cols[ang_name] = np.arctan2(dy, dx)
+
+            # Flag booleana convertida para int (se o vetor é nulo)
+            zero_name = f"vec_is_zero_{rings[i]}"
+            new_cols[zero_name] = (new_cols[mod_name] == 0).astype(int)
+
+    # Concatena todas as métricas vetoriais de uma vez
+    df = pd.concat([df, pd.DataFrame(new_cols, index=df.index)], axis=1)
+    
+    return df
+
+def vectorize_layer_energy(df, layers):
+    new_cols = {}
+
+    for layer in layers.keys():
+        rings = layers[layer]["rings"]
+        qrings = layers[layer]["qrings"]
+        
+        # Inicializamos com zeros no formato da Series do DataFrame
+        dx_sum = 0.0
+        dy_sum = 0.0
+
+        for i in range(1, len(rings)):
+            # Somando as diferenças de todos os anéis daquela camada
+            dx_sum += df[f"diff_QuarterRings_{qrings[4*i-2]}_{qrings[4*i]}"]
+            dy_sum += df[f"diff_QuarterRings_{qrings[4*i-3]}_{qrings[4*i-1]}"]
+
+        # Calculamos as métricas da camada inteira
+        mod_name = f"vec_mod_layer_{layer}"
+        ang_name = f"vec_ang_layer_{layer}"
+        zero_name = f"vec_is_zero_layer_{layer}"
+
+        new_cols[mod_name] = np.hypot(dx_sum, dy_sum)
+        new_cols[ang_name] = np.arctan2(dy_sum, dx_sum)
+        new_cols[zero_name] = (new_cols[mod_name] == 0).astype(int)
+
+    # Inserção única para evitar fragmentação
+    df = pd.concat([df, pd.DataFrame(new_cols, index=df.index)], axis=1)
+
+    return df

@@ -137,8 +137,13 @@ class QuarterRingsDataPreparation(DataPreparationStrategy):
 
     @data_handler("default")
     def quarter_logic_main(self, dataframe: pd.DataFrame, **kwargs) -> pd.DataFrame:
-        print(f"[{self.name}] Executando Quarter Rings (Main)...")
-        return dataframe.iloc[:, 0:10].head()
+        print(f"[{self.name}] Executando Quarter Rings (default)...")
+        dataframe=new_processing.normalize_qrings(dataframe, new_processing.layers)
+        dataframe=new_processing.diff_qrings_energy(dataframe, new_processing.layers)
+        dataframe=new_processing.vectorize_rings_energy(dataframe, new_processing.layers)
+        dataframe=new_processing.vectorize_layer_energy(dataframe, new_processing.layers)
+        print((dataframe.shape))
+        return dataframe
     
     @data_handler("delta")
     def quarter_logic_delta(self, dataframe: pd.DataFrame, **kwargs) -> pd.DataFrame:
@@ -152,33 +157,21 @@ class DataBuilder:
     Facade class that manages the state and orchestrates the entire process
     of data preparation and splitting.
     """
-    def __init__(self, dataframe: pd.DataFrame, alpha: Union[list, pd.Series, None] = None):
+    def __init__(
+            self, dataframe: pd.DataFrame, 
+            bins_et: Dict[str, List], 
+            bins_eta: Dict[str, List]):
+        
         self._topology_factory = DataPreparationStrategy()
         self.dataframe = dataframe
-        # self.alpha = self._set_alpha(alpha) # Defines the target only once
+        self.bins_eta = bins_eta
+        self.bins_et = bins_et
 
         # State attributes, explicitly initialized
         self.X_train: Optional[pd.DataFrame] = None
         self.X_test: Optional[pd.DataFrame] = None
         self.y_train: Optional[pd.Series] = None
         self.y_test: Optional[pd.Series] = None
-
-    def _set_alpha(self, alpha: Union[list, pd.Series, None]) -> pd.Series:
-        """Private method to validate and format the target variable."""
-        if alpha is None:
-            if "alpha" not in self.dataframe.columns:
-                raise ValueError("If 'alpha' is None, an 'alpha' column must exist in the dataframe.")
-            return self.dataframe["alpha"]
-        if isinstance(alpha, pd.Series):
-            return alpha
-        if isinstance(alpha, list):
-            if len(alpha) != len(self.dataframe):
-                raise ValueError(
-                    f"The length of the alpha list ({len(alpha)}) must be equal to "
-                    f"the length of the dataframe ({len(self.dataframe)})."
-                )
-            return pd.Series(alpha, index=self.dataframe.index, name='alpha')
-        raise TypeError(f"Unsupported type for alpha: {type(alpha).__name__}")
 
     def _get_features(self, dataframe:pd.DataFrame, topology:str='std_rings', model:str='default', **kwargs) -> pd.DataFrame:
         """Private method to generate features using the factory and a strategy."""
@@ -251,14 +244,69 @@ class DataBuilder:
         else:
             mask = column.isin(values)
         return mask.to_numpy()
+    
+    def _get_bins_alias(self, bins_key: str) -> List[List[Dict[str, List[float]]]]:
+        """
+        Selects the binning generation method based on the provided key.
+        
+        Using a mapping of function references (lazy evaluation) ensures that 
+        we only execute the required logic, saving processing time.
+        """
+        # Map keys to the method references (without calling them yet)
+        bins_map: Dict[str, Callable[[], List]] = {
+            'all': self._generate_bins_combinations,
+            # 'signal': self._generate_signal_bins,  # Example for future expansion
+        }
+
+        if bins_key not in bins_map:
+            valid_keys = list(bins_map.keys())
+            raise ValueError(f"Key '{bins_key}' not recognized. Available options: {valid_keys}")
+
+        # Execute the selected method
+        return bins_map[bins_key]()
+
+    def _generate_bins_combinations(self):
+        """
+        Generates a list of interval combinations based on the provided bin edges.
+        
+        Args:
+            bins_et (list): List of edge values for transverse energy (Et).
+            bins_eta (list): List of edge values for pseudorapidity (Eta).
+            
+        Returns:
+            list: A list of lists, where each sub-list contains dictionaries 
+                with the Eta and Et intervals.
+        """
+        params = []
+        et_values = self.bins_et['cluster_et']
+        eta_values = self.bins_eta['cluster_eta']
+        # Iterate over each eta interval (e.g., [0, 0.6], [0.6, 0.8], ...)
+        # The range goes up to len - 1 because we always take the current index and the next one
+        for i in range(len(eta_values) - 1):
+            eta_interval = [eta_values[i], eta_values[i+1]]
+            
+            # For each eta interval, iterate over each et interval
+            for j in range(len(et_values) - 1):
+                et_interval = [et_values[j], et_values[j+1]]
+                
+                # Create the dictionary structure for the current combination
+                param_combination = [
+                    {'cluster_eta': eta_interval},
+                    {'cluster_et': et_interval}
+                ]
+                
+                # Add the combination to the final list
+                params.append(param_combination)
+                
+        return params
 
     def run(
         self,
-        topology: Literal['raw', 'std_rings', 'quarter_rings',],
+        topology: Literal['raw', 'std_rings', 'quarter_rings'],
         train_size: float = 0.7,
         random_state: Optional[int] = None,
         model: Optional[str] = 'default',
-        bins_size: Optional[dict] = None,
+        bins_size = None,
         **kwargs,
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
         """
@@ -267,6 +315,10 @@ class DataBuilder:
 
         "check se dataframe é array se não for transformar. executar run com um for aqui dentreo que serra append em result"
         result=[]
+
+        if isinstance(bins_size, str):
+            bins_size=self._get_bins_alias(bins_size)
+
         self._split_by_bins(bins_size)
         for dataframe in self.dataframe:
             # 1. Generate features
