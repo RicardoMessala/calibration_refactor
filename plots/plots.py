@@ -197,7 +197,7 @@ class PlotConfig():
         self.cols: Union[str, List[str], None] = None
         self.metrics: List[Optional[float]] = []
 
-    def _build_dataframe_to_plot(self, opt):
+    def _build_dataframe_to_plot(self, opt, columns=None):
         tmp=[]
         for i in range(len(opt)):
             opt[i].fit_best_model() 
@@ -205,7 +205,8 @@ class PlotConfig():
             df_temp = self._merge_dataframes(
                 self.dataframe.loc[opt[i].y_test.index],
                 opt[i].y_test,
-                opt[i].y_pred
+                opt[i].y_pred,
+                columns=columns
             )
             tmp.append(df_temp)
         return pd.concat(tmp, ignore_index=True)
@@ -214,7 +215,7 @@ class PlotConfig():
         df1: pd.DataFrame, # X_test
         s: pd.Series,      # y_test
         arr: np.ndarray,   # y_pred
-        cols: list[str] = ['cluster_eta', 'cluster_et']
+        columns: list[str] = None
     ) -> pd.DataFrame:
         """
         Merge selected columns from a DataFrame with a Series and a NumPy ndarray 
@@ -238,9 +239,11 @@ class PlotConfig():
             A DataFrame containing the selected columns from df1, the Series, 
             and the ndarray as additional columns.
         """
+        if columns is None:
+            columns = ['cluster_eta', 'cluster_et']
 
         # Select only the required columns from the first DataFrame
-        df_sel: pd.DataFrame = df1[cols]
+        df_sel: pd.DataFrame = df1[columns]
 
         # Convert Series to DataFrame (keep name if available)
         s_df: pd.DataFrame = s.to_frame(name=s.name if s.name else "series_col")
@@ -340,14 +343,14 @@ class PlotConfig():
         # print(self.intervals)
         return parameters_filtered
 
-    def _set_plot(self):
+    def _set_plot(self, columns=None):
         parameters_filtered = []
         
         if self.optimization and not isinstance(self.optimization[0], (list, tuple)):
             self.optimization = [self.optimization]
         
         for opt in self.optimization:
-            data = self._build_dataframe_to_plot(opt)
+            data = self._build_dataframe_to_plot(opt, columns=columns)
             parameters_filtered.append(self._parameters_filter(data))
         
         return parameters_filtered 
@@ -356,7 +359,7 @@ class PlotConfig():
     def plot_errorbars(self,
         data_metric,              
         plot_configs: List,
-        y_test_col='alpha', 
+        y_test_col= 'alpha', 
         y_pred_col='y_pred',
         metric: str = 'iqr',
         title: str = "Figure Title",

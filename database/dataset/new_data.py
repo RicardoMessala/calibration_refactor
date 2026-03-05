@@ -93,12 +93,12 @@ class DataPreparationStrategy():
             raise TypeError(f"O handler para '{model_name}' deve ser chamável.")
         self._model_handlers[model_name] = handler
 
-    def feature_modeling(self, df: pd.DataFrame, model: str = 'default', **kwargs) -> pd.DataFrame:
+    def feature_modeling(self, df: pd.DataFrame, columns: Optional[List[str]] = None, selector:str=None, model: str = 'default', **kwargs) -> pd.DataFrame:
         """
         Executa o handler específico registrado na instância.
         """
         handler = self._model_handlers.get(model)
-        
+        print('colunas do feature_modeling', columns)
         if not handler:
             valid_models = list(self._model_handlers.keys())
             raise ValueError(
@@ -106,7 +106,7 @@ class DataPreparationStrategy():
                 f"Modelos disponíveis nesta estratégia: {valid_models}"
             )
             
-        return handler(df, **kwargs)
+        return handler(df, columns, selector, **kwargs)
 
 
 # --- Implementações Concretas (Topologias) ---
@@ -116,9 +116,9 @@ class RawDataPreparation(DataPreparationStrategy):
     name = 'raw'  # Chave para o Factory .create('raw')
     
     @data_handler("default") # Chave para o Dispatcher .feature_modeling(..., model='default')
-    def process_raw_head(self, dataframe: pd.DataFrame, **kwargs) -> pd.DataFrame:
+    def process_raw_head(self, dataframe: pd.DataFrame, columns: Optional[List[str]] = None, selector=None, **kwargs) -> pd.DataFrame:
         print(f"[{self.name}] Executando lógica Raw Default...")
-        return new_processing._get_rings_default(dataframe)
+        return new_processing._columns_selector(dataframe=dataframe, columns=columns, selector=selector)
 
 
 class StdRingsDataPreparation(DataPreparationStrategy):
@@ -136,8 +136,9 @@ class QuarterRingsDataPreparation(DataPreparationStrategy):
     name = 'quarter_rings'
 
     @data_handler("default")
-    def quarter_logic_main(self, dataframe: pd.DataFrame, **kwargs) -> pd.DataFrame:
+    def quarter_logic_main(self, dataframe: pd.DataFrame, columns, selector, **kwargs) -> pd.DataFrame:
         print(f"[{self.name}] Executando Quarter Rings (default)...")
+        dataframe=new_processing._columns_selector(dataframe=dataframe, columns=columns, selector=selector)
         dataframe=new_processing.normalize_qrings(dataframe, new_processing.layers)
         dataframe=new_processing.diff_qrings_energy(dataframe, new_processing.layers)
         dataframe=new_processing.vectorize_rings_energy(dataframe, new_processing.layers)
@@ -173,22 +174,18 @@ class DataBuilder:
         self.y_train: Optional[pd.Series] = None
         self.y_test: Optional[pd.Series] = None
 
-    def _get_features(self, dataframe:pd.DataFrame, topology:str='std_rings', model:str='default', **kwargs) -> pd.DataFrame:
+    def _get_features(self, dataframe:pd.DataFrame, target:str='alpha', topology:str='std_rings', model:str='default', columns: Optional[List[str]] = None, selector:str=None, **kwargs) -> pd.DataFrame:
         """Private method to generate features using the factory and a strategy."""
+        print('colunas do _get_features:', columns)
         topology_class = self._topology_factory.create_topology(topology)
-        # Ensures 'alpha' is not passed to the feature preparation step
-        features_df = dataframe.drop(columns=['alpha'], errors='ignore')
-        return topology_class.feature_modeling(features_df, model, **kwargs)
+        target_column = dataframe[target]
+        features = dataframe.drop(target, axis=1)
+        return topology_class.feature_modeling(df=features, columns=columns, selector=selector, model=model, **kwargs), target_column
 
-    def _split_data(self, dataframe: pd.DataFrame, features: pd.DataFrame, train_size: float, random_state: Optional[int]) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
-        """Private method for splitting the data."""
-        # Ensures that the index of y (alpha) is aligned with X (features)
-        aligned_target = dataframe['alpha'].loc[features.index]
-        # print('aligned', aligned_target)
-        # print('out aligned')
+    def _split_data(self, features: pd.DataFrame, target_column:pd.DataFrame, train_size: float, random_state: Optional[int]) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
         return sklearn.model_selection.train_test_split(
             features,
-            aligned_target,
+            target_column,
             train_size=train_size,
             random_state=random_state
         )
@@ -303,10 +300,13 @@ class DataBuilder:
     def run(
         self,
         topology: Literal['raw', 'std_rings', 'quarter_rings'],
+        target:str='alpha',
         train_size: float = 0.7,
-        random_state: Optional[int] = None,
         model: Optional[str] = 'default',
+        columns: Optional[List[str]] = None,
+        selector:str=None,
         bins_size = None,
+        random_state: Optional[int] = None,
         **kwargs,
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
         """
@@ -324,12 +324,12 @@ class DataBuilder:
             # 1. Generate features
             # print('dentro do loop',dataframe)
             # print('linha seguinte')
-            features = self._get_features(dataframe=dataframe,topology=topology, model=model, **kwargs)
+            features, target_column = self._get_features(dataframe=dataframe, target=target, columns=columns, selector=selector, topology=topology, model=model, **kwargs)
 
             # 2. Split data
             self.X_train, self.X_test, self.y_train, self.y_test = self._split_data(
-                dataframe=dataframe,
                 features=features,
+                target_column=target_column,
                 train_size=train_size,
                 random_state=random_state
             )
@@ -337,66 +337,3 @@ class DataBuilder:
             # 3. Update the builder's state
             result.append([self.X_train, self.X_test, self.y_train, self.y_test])
         return result
-
-
-# --- Utility functions ---
-
-def _set_data_to_plot(
-    df1: pd.DataFrame = None, # X_test
-    s: pd.Series = None,      # y_test
-    arr: np.ndarray= None,   # y_pred
-    cols: list[str] = ['cluster_eta', 'cluster_et']
-) -> pd.DataFrame:
-    """
-    Merge selected columns from a DataFrame with a Series and a NumPy ndarray 
-    into a single DataFrame (side by side concatenation).
-
-    Parameters
-    ----------
-    df1 : pd.DataFrame
-        Input DataFrame containing the columns of interest.
-    s : pd.Series
-        Series to be added as a new column in the final DataFrame.
-    arr : np.ndarray
-        NumPy array to be added as one or multiple columns in the final DataFrame.
-    cols : list[str], optional
-        List of column names to be selected from df1. 
-        Default is ['cluster_eta', 'cluster_et'].
-
-    Returns
-    -------
-    pd.DataFrame
-        A DataFrame containing the selected columns from df1, the Series, 
-        and the ndarray as additional columns.
-    """
-
-    # Select only the required columns from the first DataFrame
-    df_sel: pd.DataFrame = df1[cols]
-
-    # Convert Series to DataFrame (keep name if available)
-    s_df: pd.DataFrame = s.to_frame(name=s.name if s.name else "series_col")
-
-    # Convert ndarray to DataFrame
-    if arr.ndim == 1:
-        # If 1D, single column
-        arr_df: pd.DataFrame = pd.DataFrame(arr, columns=["y_pred"])
-    else:
-        # If 2D, generate numbered column names
-        arr_df: pd.DataFrame = pd.DataFrame(
-            arr, 
-            columns=[f"y_pred_{i}" for i in range(arr.shape[1])]
-        )
-
-    # Concatenate all DataFrames side by side
-    final_df: pd.DataFrame = pd.concat(
-        [df_sel.reset_index(drop=True),
-         s_df.reset_index(drop=True),
-         arr_df.reset_index(drop=True)],
-        axis=1
-    )
-
-    return final_df
-
-def _get_test_data_with_bins(dataframe:pd.DataFrame, y_test:pd.Series):
-    # retun X_test values with all columns, once methode _get_features remove some features
-    return dataframe.loc[y_test.index]
