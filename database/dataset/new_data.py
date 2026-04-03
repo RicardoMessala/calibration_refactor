@@ -138,11 +138,13 @@ class QuarterRingsDataPreparation(DataPreparationStrategy):
     @data_handler("default")
     def quarter_logic_main(self, dataframe: pd.DataFrame, columns, selector, **kwargs) -> pd.DataFrame:
         print(f"[{self.name}] Executando Quarter Rings (default)...")
-        dataframe=new_processing._columns_selector(dataframe=dataframe, columns=columns, selector=selector)
-        dataframe=new_processing.normalize_qrings(dataframe, new_processing.layers)
+        dataframe=new_processing.rings_layers_sum(dataframe, new_processing.layers)
+        #dataframe=new_processing.normalize_qrings(dataframe, new_processing.layers)
         dataframe=new_processing.diff_qrings_energy(dataframe, new_processing.layers)
         dataframe=new_processing.vectorize_rings_energy(dataframe, new_processing.layers)
         dataframe=new_processing.vectorize_layer_energy(dataframe, new_processing.layers)
+        dataframe=new_processing.vector_layers_components(dataframe, new_processing.layers)
+        dataframe=new_processing._columns_selector(dataframe=dataframe, columns=columns, selector=selector)
         print((dataframe.shape))
         return dataframe
     
@@ -202,6 +204,7 @@ class DataBuilder:
             data_remaining = self.dataframe.copy()
 
             for group_conditions in bins_size:
+                print('group conditions',group_conditions)
                 masks = []
                 for condition_dict in group_conditions:
                     for col_name, intervals in condition_dict.items():
@@ -216,6 +219,7 @@ class DataBuilder:
                 result_list.append(filtered)
                 data_remaining = data_remaining.loc[~combined_mask]
 
+            if len(data_remaining) > 0:
                 result_list.append(data_remaining)
             self.dataframe = result_list
 

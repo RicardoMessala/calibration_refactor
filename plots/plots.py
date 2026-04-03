@@ -132,7 +132,6 @@ def calculate_bin_half_widths(bins: BinsType) -> List[float]:
 
     return [(bin_edges[i] - bin_edges[i-1]) / 2 for i in range(1, len(bin_edges))]
 
-
 def evaluate_metrics(
     data: Union[pd.DataFrame, List[pd.DataFrame]],
     metric: str = 'iqr',
@@ -362,6 +361,7 @@ class PlotConfig():
         y_test_col= 'alpha', 
         y_pred_col='y_pred',
         metric: str = 'iqr',
+        reference_control: bool=True,
         title: str = "Figure Title",
         y_label: str = "Y-axis Value",
         x_label: str = "X-axis Value",
@@ -422,6 +422,22 @@ class PlotConfig():
             
             # Renderização no eixo (axis) do Matplotlib
             ax.errorbar(x_data, y_data, xerr=x_err, **plot_kwargs)
+        
+        if reference_control:
+            y_data = evaluate_metrics(
+                data=self._parameters_filter(self.dataframe),
+                metric=metric,
+                y_test_col=y_test_col,
+                y_pred_col='cluster_et',
+            )
+            # Validação de consistência dos dados
+            if len(y_data) != len(x_data):
+                label_name = config.get('label', 'Desconhecido')
+                raise ValueError(
+                    f"Length of y_data ({len(y_data)}) for label '{label_name}' "
+                    f"does not match number of bins ({len(x_data)})."
+                )
+            ax.errorbar(x_data, y_data, xerr=x_err,fmt='x',color='orange', label='Reference Control')
 
         # 3. Set general plot aesthetics
         ax.legend(loc="best", fontsize=legend_fontsize)

@@ -218,25 +218,70 @@ def vectorize_layer_energy(df, layers):
         rings = layers[layer]["rings"]
         qrings = layers[layer]["qrings"]
         
-        # Inicializamos com zeros no formato da Series do DataFrame
         dx_sum = 0.0
         dy_sum = 0.0
 
         for i in range(1, len(rings)):
-            # Somando as diferenças de todos os anéis daquela camada
             dx_sum += df[f"diff_QuarterRings_{qrings[4*i-2]}_{qrings[4*i]}"]
             dy_sum += df[f"diff_QuarterRings_{qrings[4*i-3]}_{qrings[4*i-1]}"]
 
-        # Calculamos as métricas da camada inteira
+        # 1. Cálculo do Módulo (Magnitude)
         mod_name = f"vec_mod_layer_{layer}"
-        ang_name = f"vec_ang_layer_{layer}"
+        mod = np.hypot(dx_sum, dy_sum)
+        new_cols[mod_name] = mod
+
+        # 2. Padrão Ouro: Seno e Cosseno
+        # Usamos np.where para evitar divisão por zero se o módulo for 0
+        new_cols[f"vec_cos_layer_{layer}"] = np.where(mod > 0, dx_sum / mod, 0.0)
+        new_cols[f"vec_sin_layer_{layer}"] = np.where(mod > 0, dy_sum / mod, 0.0)
+
+        # 3. Flag de Vetor Nulo (Importante para a árvore isolar esses casos)
         zero_name = f"vec_is_zero_layer_{layer}"
+        new_cols[zero_name] = (mod == 0).astype(int)
 
-        new_cols[mod_name] = np.hypot(dx_sum, dy_sum)
-        new_cols[ang_name] = np.arctan2(dy_sum, dx_sum)
-        new_cols[zero_name] = (new_cols[mod_name] == 0).astype(int)
+    # Inserção única eficiente
+    df = pd.concat([df, pd.DataFrame(new_cols, index=df.index)], axis=1)
 
-    # Inserção única para evitar fragmentação
+    return df
+
+def vector_layers_components(df, layers):
+    new_cols = {}
+
+    for layer in layers.keys():
+        rings = layers[layer]["rings"]
+        qrings = layers[layer]["qrings"]
+
+        dy_sum_q1 = 0
+        dx_sum_q2 = 0
+        dy_sum_q3 = 0
+        dx_sum_q4 = 0
+
+        for i in range(1, len(rings)):
+            dy_sum_q1 += df[f"QuarterRings_{qrings[4*i-3]}"]
+            dx_sum_q2 += df[f"QuarterRings_{qrings[4*i-2]}"]
+            dy_sum_q3 += df[f"QuarterRings_{qrings[4*i-1]}"]
+            dx_sum_q4 += df[f"QuarterRings_{qrings[4*i]}"]
+
+        new_cols[f"vec_Q1_layer_{layer}"] = dy_sum_q1
+        new_cols[f"vec_Q2_layer_{layer}"] = dx_sum_q2
+        new_cols[f"vec_Q3_layer_{layer}"] = dy_sum_q3
+        new_cols[f"vec_Q4_layer_{layer}"] = dx_sum_q4
+
+    # Inserção única eficiente
+    df = pd.concat([df, pd.DataFrame(new_cols, index=df.index)], axis=1)
+
+    return df
+
+def rings_layers_sum(df, layers):
+    new_cols = {}
+
+    for layer, cfg in layers.items():
+        rings = cfg["rings"]
+
+        cols = [f"StdRings_{r}" for r in rings]
+        new_cols[f"E_layer_{layer}"] = df[cols].sum(axis=1)
+
+    # inserção única eficiente
     df = pd.concat([df, pd.DataFrame(new_cols, index=df.index)], axis=1)
 
     return df
