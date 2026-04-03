@@ -3,7 +3,8 @@ import xgboost as xgb
 import numpy as np
 import pandas as pd
 import lightgbm as lgb
-from typing import Any, Union, List
+import matplotlib.pyplot as plt
+from typing import Any, Union, List, Dict
 
 ArrayLike = Union[np.ndarray, pd.DataFrame, pd.Series, List[float], List[int]]
 Booster = lgb.Booster
@@ -37,6 +38,7 @@ class LGBMTraining:
         self.y_test = y_test
         self.model: Booster | None = None
         self.y_pred: np.ndarray | None = None
+        self.evals_result_: Dict[str, Dict[str, list]] = {}
         
     def train(self, params: dict[str, Any], **kwargs: Any) -> Booster:
         """
@@ -53,13 +55,21 @@ class LGBMTraining:
         lgb_train = lgb.Dataset(self.X_train, self.y_train)
         lgb_test = lgb.Dataset(self.X_test, self.y_test, reference=lgb_train)
 
+
+        self.evals_result_ = {}
+
+        callbacks = kwargs.pop('callbacks', []).copy()
+        
+        callbacks.append(lgb.record_evaluation(self.evals_result_))
+
         self.model = lgb.train(
             params=params,
             train_set=lgb_train,
             valid_sets=[lgb_train, lgb_test],
+           #valid_names=['train loss', 'validation loss'],
+            callbacks=callbacks,
             **kwargs
         )
-        return self.model
 
     def predict(self) -> np.ndarray:
         """
@@ -113,35 +123,20 @@ class LGBMTraining:
 
         self.model.save_model(path)
 
-    def plot_metric(self, **kwargs: Any):
+    def plot_metric(self, metric: str = 'binary_logloss') -> None:
         """
-        Plots the metric results recorded during training.
-
-        This method is a wrapper around `lightgbm.plot_metric`. It requires
-        matplotlib to be installed. The user is responsible for calling
-        `matplotlib.pyplot.show()` to display the plot.
+        Plota a curva de aprendizagem para verificar a existência de overfitting no último modelo treinado.
 
         Args:
-            **kwargs: Other keyword arguments to be passed to `lgb.plot_metric`
-                      (e.g., ax, figsize, title, metric).
-
-        Raises:
-            RuntimeError: If the method is called before the model has been trained.
-            ImportError: If matplotlib is not installed.
-
-        Returns:
-            matplotlib.axes.Axes: The axes object with the plot.
+            metric (str): O nome da métrica a plotar (ex: 'mse', 'binary_logloss').
         """
-        if self.model is None:
-            raise RuntimeError("The model has not been trained yet. Call the 'train' method first.")
+        if not self.evals_result_:
+            print("Aviso: Não há métricas de treino disponíveis para plotar. Treine o modelo primeiro.")
+            return
         
-        try:
-            import matplotlib
-        except ImportError:
-            raise ImportError("matplotlib is required to use plot_metric. Please install it with 'pip install matplotlib'.")
-
-        return lgb.plot_metric(self.model, **kwargs)
-
+        # Utiliza a função nativa do LightGBM para plotar as métricas da última execução
+        lgb.plot_metric(self.evals_result_, metric=metric, figsize=(15, 8), xlim=(0, self.model.best_iteration-1))
+        
 
 class XGBoostTraining: # Define a classe que vai gerenciar o treinamento
     def __init__(self, 
@@ -160,8 +155,7 @@ class XGBoostTraining: # Define a classe que vai gerenciar o treinamento
         # Inicializa a variável do modelo como Vazia (None).
         # Isso serve para verificarmos depois se o treino já aconteceu.
         self.model = None
-            
-        
+
 
     def train(self, params: Union[list, dict[str, Any]], **kwargs: Any ) -> Booster:
         
