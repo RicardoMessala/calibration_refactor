@@ -138,45 +138,40 @@ class LGBMTraining:
         lgb.plot_metric(self.evals_result_, metric=metric, figsize=(15, 8), xlim=(0, self.model.best_iteration-1))
         
 
-class XGBoostTraining: # Define a classe que vai gerenciar o treinamento
-    def __init__(self, 
-        X_train: Union[np.ndarray, pd.DataFrame], # Aceita Array ou DataFrame
-        X_test: Union[np.ndarray, pd.DataFrame],
-        y_train: ArrayLike, # Aceita qualquer tipo de lista numérica
-        y_test: ArrayLike):
-
-        # Guarda os dados dentro do objeto (self) para que possam ser usados
-        # pelos métodos train() e predict() sem precisar passá-los de novo.
-        self.X_train = X_train
-        self.X_test = X_test
-        self.y_train = y_train
-        self.y_test = y_test
+class XGBoostTraining:
+    def __init__(self, X_train, X_test, y_train, y_test): 
+        # A fábrica manda 4 argumentos, nós recebemos 4 argumentos!
         
-        # Inicializa a variável do modelo como Vazia (None).
-        # Isso serve para verificarmos depois se o treino já aconteceu.
         self.model = None
-
-
-    def train(self, params: Union[list, dict[str, Any]], **kwargs: Any ) -> Booster:
         
+        # Chama a função de processamento passando os 4 argumentos
+        self._processar_dados(X_train, X_test, y_train, y_test)
+
+    def _processar_dados(self, X_train, X_test, y_train, y_test):
+        # Se os dados vierem como uma lista de pedaços (folds/gavetas), nós concatenamos.
+        # Caso contrário, apenas salvamos direto.
+        
+        if isinstance(X_train, list):
+            self.X_train = pd.concat(X_train, axis=0)
+            self.X_test  = pd.concat(X_test, axis=0)
+            self.y_train = pd.concat(y_train, axis=0)
+            self.y_test  = pd.concat(y_test, axis=0)
+        else:
+            self.X_train = X_train
+            self.X_test  = X_test
+            self.y_train = y_train
+            self.y_test  = y_test
+            
+    def train(self, params: Union[list, dict[str, Any]], **kwargs: Any ) -> Booster:
         # Converte os dados (Pandas/Numpy) para DMatrix.
-        # DMatrix é uma estrutura de dados interna otimizada do XGBoost 
-        # que economiza memória e acelera muito o cálculo das árvores.
         xgb_train = xgb.DMatrix(self.X_train, self.y_train)
         xgb_test = xgb.DMatrix(self.X_test, self.y_test)
 
         # Chama a função principal de treino da biblioteca
         self.model = xgb.train(
-            params = params,      # Dicionário com configurações (learning_rate, depth, etc.)
-            dtrain = xgb_train,   # Os dados onde o modelo vai "estudar"
-            
-            # 'evals': Lista de monitoramento.
-            # O modelo vai imprimir o erro desses dois datasets a cada iteração.
-            # É ESSENCIAL para o Early Stopping saber se o erro no teste parou de cair.
+            params = params,      
+            dtrain = xgb_train,   
             evals = [(xgb_train, 'train'), (xgb_test, 'test')],
-            
-            # **kwargs: Pega argumentos extras passados na chamada, como:
-            # num_boost_round (total de árvores) e early_stopping_rounds (paciência).
             **kwargs 
         )
         
@@ -187,11 +182,7 @@ class XGBoostTraining: # Define a classe que vai gerenciar o treinamento
         if self.model is None:
             raise RuntimeError("The internal model has not been trained yet. Call the 'train' method first.")
         
-        # Realiza a previsão.
-        # 1. xgb.DMatrix(self.X_test): Converte os dados de teste para o formato que o Booster aceita.
-        # 2. iteration_range=(0, best + 1): O "Pulo do Gato".
-        #    Diz ao modelo: "Use apenas as árvores do começo até a 'best_iteration'".
-        #    Isso descarta as árvores finais que causaram overfitting (pós-early stopping).
+        # Realiza a previsão usando a melhor iteração.
         self.y_pred = self.model.predict(xgb.DMatrix(self.X_test), iteration_range=(0, self.model.best_iteration + 1))
         
         return self.y_pred
