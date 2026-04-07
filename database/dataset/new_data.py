@@ -204,7 +204,6 @@ class DataBuilder:
             data_remaining = self.dataframe.copy()
 
             for group_conditions in bins_size:
-                print('group conditions',group_conditions)
                 masks = []
                 for condition_dict in group_conditions:
                     for col_name, intervals in condition_dict.items():
@@ -218,7 +217,7 @@ class DataBuilder:
                 filtered = data_remaining.loc[combined_mask]
                 result_list.append(filtered)
                 data_remaining = data_remaining.loc[~combined_mask]
-
+                print('group conditions',group_conditions, ' Number of events:', len(filtered))
             if len(data_remaining) > 0:
                 result_list.append(data_remaining)
             self.dataframe = result_list

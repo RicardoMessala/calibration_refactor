@@ -1,10 +1,11 @@
 import inspect
 import numpy as np
 import pandas as pd
+import sklearn.metrics
 from skopt.space import Dimension
 from modules.models import LGBMTraining, XGBoostTraining
 from modules.optimizers import BayesianOptimization
-from sklearn.metrics import mean_absolute_error, mean_squared_error
+#from sklearn.metrics import mean_absolute_error, mean_squared_error
 from abc import ABC
 from typing import Any, Callable, Type, Union, List, Tuple, Optional
 
@@ -23,8 +24,13 @@ class AbstractFactory(ABC):
     }
 
     METRIC_FUNCTIONS: dict[str, Callable[..., float]] = {
-        "mae": mean_absolute_error,
-        "mse": mean_squared_error,
+        "mae": sklearn.metrics.mean_absolute_error,
+        "mse": sklearn.metrics.mean_squared_error,
+        "gamma": sklearn.metrics.mean_gamma_deviance,
+        "mape": sklearn.metrics.mean_absolute_percentage_error,
+        "quantile": sklearn.metrics.mean_pinball_loss,
+        "poisson": sklearn.metrics.mean_poisson_deviance,
+        "tweedie": sklearn.metrics.mean_tweedie_deviance,
     }
 
     def _get_component(
