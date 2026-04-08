@@ -27,6 +27,7 @@ class AbstractFactory(ABC):
         "mae": sklearn.metrics.mean_absolute_error,
         "mse": sklearn.metrics.mean_squared_error,
         "msle": sklearn.metrics.mean_squared_log_error,
+        "rmsle": sklearn.metrics.root_mean_squared_log_error,
         "gamma": sklearn.metrics.mean_gamma_deviance,
         "mape": sklearn.metrics.mean_absolute_percentage_error,
         "quantile": sklearn.metrics.mean_pinball_loss,

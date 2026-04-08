@@ -8,6 +8,10 @@ from matplotlib.axes import Axes
 # A type alias to handle both lists and dictionaries for bin edges
 BinsType = Union[List[Union[float, int]], Dict[str, List[Union[float, int]]]]
 
+# Define the type for our metric functions for clarity
+MetricCallable = Callable[[pd.DataFrame, str, str], float]
+
+
 def calculate_iqr(df: pd.DataFrame, y_test_col: str, y_pred_col: str) -> float:
     """
     Calculates the IQR of the test column or the ratio between test and prediction.
@@ -75,14 +79,39 @@ def calculate_mae(df: pd.DataFrame, y_test_col: str, y_pred_col: str) -> float:
     absolute_errors = (df[y_test_col] - df[y_pred_col]).abs()
     return absolute_errors.mean()
 
-# Define the type for our metric functions for clarity
-MetricCallable = Callable[[pd.DataFrame, str, str], float]
+def calculate_mape(df: pd.DataFrame, y_test_col: str, y_pred_col: str) -> float:
+    """
+    Calculates the Mean Absolute Percentage Error (MAPE).
+
+    Args:
+        df (pd.DataFrame): The input DataFrame.
+        y_test_col (str): The name of the ground truth column.
+        y_pred_col (str): The name of the prediction column.
+
+    Returns:
+        float: The calculated MAPE value (as a decimal).
+    """
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError("The provided item is not a DataFrame.")
+    
+    if y_test_col not in df.columns or y_pred_col not in df.columns:
+        raise ValueError(f"For MAPE, both columns '{y_test_col}' and '{y_pred_col}' are required.")
+
+    # Avoid division by zero
+    if (df[y_test_col] == 0).any():
+        raise ValueError("MAPE is undefined when there are zero values in the ground truth column.")
+        
+    absolute_percentage_errors = (df[y_test_col] - df[y_pred_col]).abs() / df[y_test_col].abs()
+    
+    return absolute_percentage_errors.mean()
+
 
 # This dictionary acts as a registry to select the desired metric function.
 METRIC_FUNCTIONS: Dict[str, MetricCallable] = {
     'iqr': calculate_iqr,
     'rmse': calculate_rmse,
     'mae': calculate_mae,
+    'mape': calculate_mape,
 }
 
 
