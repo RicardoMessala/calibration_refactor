@@ -26,6 +26,7 @@ class AbstractFactory(ABC):
     METRIC_FUNCTIONS: dict[str, Callable[..., float]] = {
         "mae": sklearn.metrics.mean_absolute_error,
         "mse": sklearn.metrics.mean_squared_error,
+        "rmse": sklearn.metrics.root_mean_squared_error,
         "msle": sklearn.metrics.mean_squared_log_error,
         "rmsle": sklearn.metrics.root_mean_squared_log_error,
         "gamma": sklearn.metrics.mean_gamma_deviance,
