@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from typing import List, Optional
+from typing import List, Optional, Union
 
 # Metodos para atributos dos rings - Apenas criar novas def
 # Function to compute the relevant variables
@@ -27,7 +27,7 @@ def calc_sv(e237, e277, rings):
 # Novo def CalcRings(rings, cluster_eta, cluster_phi, delta_eta_calib, delta_phi_calib, hotCellEta, hotCellPhi,):
 # será usado tanto pra o defaults do std rings quanto do quarter rings
 
-def _get_columns(dataframe: pd.DataFrame, columns: Optional[List[str]] = None) -> pd.DataFrame:
+def _get_columns(dataframe: pd.DataFrame, columns: Optional[List[str]] = None) -> Union[pd.DataFrame,np.ndarray]:
     """
     Processes the DataFrame by selecting columns based on a list
     of column names. If 'columns' is None or an empty list, 
@@ -51,9 +51,9 @@ def _get_columns(dataframe: pd.DataFrame, columns: Optional[List[str]] = None) -
         return dataframe
 
     # Selects all columns at once using the list of names.
-    return dataframe[columns]
+    return dataframe[columns].values.astype(np.float32)
 
-def _remove_columns(dataframe: pd.DataFrame, columns: Optional[List[str]] = None) -> pd.DataFrame:
+def _remove_columns(dataframe: pd.DataFrame, columns: Optional[List[str]] = None) -> Union[pd.DataFrame, np.ndarray]:
 
     # Checks if columns is None or an empty list.
     # If so, returns the original DataFrame without modifications.
@@ -65,7 +65,7 @@ def _remove_columns(dataframe: pd.DataFrame, columns: Optional[List[str]] = None
     # Selects all columns at once using the list of names.
     return dataframe.drop(columns=columns)
    
-def _columns_selector(dataframe: pd.DataFrame, columns: Optional[List[str]] = None, selector:str=None) -> pd.DataFrame:
+def _columns_selector(dataframe: pd.DataFrame, columns: Optional[List[str]] = None, selector:str=None) -> Union[pd.DataFrame, np.ndarray]:
     print('saida selector ', selector)
     if selector=='get':
         return _get_columns(dataframe=dataframe, columns=columns)
@@ -82,7 +82,7 @@ def calc_asym_weights_delta(
     std_rings_original: pd.DataFrame,
     rings_columns: List[List[str]] = None,
     clusters_columns: List[List[str]] = None
-) -> pd.DataFrame:
+) -> Union[pd.DataFrame, np.ndarray]:
     
     # 1. Filtragem dos dados (esta parte está correta)
     filtered_qr = _get_columns(dataframe=quarter_rings_original, columns=rings_columns)
@@ -90,44 +90,49 @@ def calc_asym_weights_delta(
     clusters = _get_columns(dataframe=quarter_rings_original, columns=clusters_columns)
 
     # 2. Lógica de cálculo (correta, mas dependente da ordem das colunas)
-    phi_p_eta_p = filtered_qr.iloc[:, 0::4]
-    phi_p_eta_m = filtered_qr.iloc[:, 1::4]
-    phi_m_eta_p = filtered_qr.iloc[:, 2::4]
-    phi_m_eta_m = filtered_qr.iloc[:, 3::4]
+    phi_p_eta_p = filtered_qr[:, 0::4]
+    phi_p_eta_m = filtered_qr[:, 1::4]
+    phi_m_eta_p = filtered_qr[:, 2::4]
+    phi_m_eta_m = filtered_qr[:, 3::4]
 
     # --- CORREÇÃO APLICADA AQUI ---
     # Preserva o índice original e atribui nomes de colunas significativos
     
     # Nomes base para as novas colunas
-    base_names = [col.rsplit('_', 2)[0] for col in phi_p_eta_p.columns]
-    
+    base_names = [col.rsplit('_', 2)[0] for col in rings_columns[0::4]]
+    idx = quarter_rings_original.index
+
     delta_eta_phi_p = pd.DataFrame(
-        phi_p_eta_p.to_numpy() - phi_p_eta_m.to_numpy(),
-        index=filtered_qr.index,
+        phi_p_eta_p - phi_p_eta_m,
+        index=quarter_rings_original.index,
         columns=[f'{name}_delta_eta_phi_p' for name in base_names]
     )
     delta_eta_phi_m = pd.DataFrame(
-        phi_m_eta_p.to_numpy() - phi_m_eta_m.to_numpy(),
-        index=filtered_qr.index,
+        phi_m_eta_p - phi_m_eta_m,
+        index=quarter_rings_original.index,
         columns=[f'{name}_delta_eta_phi_m' for name in base_names]
     )
     delta_phi_eta_p = pd.DataFrame(
-        phi_p_eta_p.to_numpy() - phi_m_eta_p.to_numpy(),
-        index=filtered_qr.index,
+        phi_p_eta_p - phi_m_eta_p,
+        index=quarter_rings_original.index,
         columns=[f'{name}_delta_phi_eta_p' for name in base_names]
     )
     delta_phi_eta_m = pd.DataFrame(
-        phi_p_eta_m.to_numpy() - phi_m_eta_m.to_numpy(),
-        index=filtered_qr.index,
+        phi_p_eta_m - phi_m_eta_m,
+        index=quarter_rings_original.index,
         columns=[f'{name}_delta_phi_eta_m' for name in base_names]
     )
+
+    df_std=pd.DataFrame(filtered_std, index =idx, columns=rings_columns)
+    df_cluster = pd.DataFrame(clusters, index=idx, columns=clusters_columns)
+
 
     # 3. Concatenação final (agora funcionará corretamente)
     final_rings = pd.concat([
         delta_eta_phi_p, delta_eta_phi_m,
         delta_phi_eta_p, delta_phi_eta_m, 
-        filtered_std,
-        clusters
+        df_std,
+        df_cluster
     ], axis=1)
 
     return final_rings
@@ -140,13 +145,18 @@ def normalize_qrings(df,layers):
 
         for i in range(1, len(rings)):
 
-            std = df[f"StdRings_{rings[i]}"]
+            std = f"StdRings_{rings[i]}"
             qr_cols = [f"QuarterRings_{j}" for j in range(qrings[4*i-3], qrings[4*i]+1)]
-            df.loc[:, qr_cols] = (
-                df[qr_cols]
-                .div(std.abs(), axis=0)
-                .where(std.ne(0), 0)
-            )
+            
+            qr_matriz = df[qr_cols].values
+            std_abs = np.abs(df[std].values)[:, np.newaxis]
+
+            result = np.zeros_like(qr_matriz)
+            np.divide(qr_matriz, std_abs,out=result, where=std_abs !=0)
+
+            result[~np.isfinite(result)] = np.nan
+            
+            df.loc[:, qr_cols] = result
 
     return df
 
@@ -168,9 +178,10 @@ def diff_qrings_energy(df, layers):
             # 2. Em vez de df[novo] = ..., guardamos no dicionário
             name_1_3 = f"diff_QuarterRings_{qrings[4*i-3]}_{qrings[4*i-1]}"
             name_2_4 = f"diff_QuarterRings_{qrings[4*i-2]}_{qrings[4*i]}"
+
             
-            new_cols[name_1_3] = df[q1] - df[q3]
-            new_cols[name_2_4] = df[q2] - df[q4]
+            new_cols[name_1_3] = df[q1].values - df[q3].values
+            new_cols[name_2_4] = df[q2].values - df[q4].values
 
     # 3. Concatenamos todas as novas colunas de uma vez só ao final
     # axis=1 significa concatenar colunas (horizontalmente)
@@ -190,8 +201,8 @@ def vectorize_rings_energy(df, layers):
             col_dx = f"diff_QuarterRings_{qrings[4*i-2]}_{qrings[4*i]}"
             col_dy = f"diff_QuarterRings_{qrings[4*i-3]}_{qrings[4*i-1]}"
             
-            dx = df[col_dx]
-            dy = df[col_dy]
+            dx = df[col_dx].values
+            dy = df[col_dy].values
 
             # Módulo do vetor usando a hipotenusa
             mod_name = f"vec_mod_{rings[i]}"
@@ -222,8 +233,8 @@ def vectorize_layer_energy(df, layers):
         dy_sum = 0.0
 
         for i in range(1, len(rings)):
-            dx_sum += df[f"diff_QuarterRings_{qrings[4*i-2]}_{qrings[4*i]}"]
-            dy_sum += df[f"diff_QuarterRings_{qrings[4*i-3]}_{qrings[4*i-1]}"]
+            dx_sum += df[f"diff_QuarterRings_{qrings[4*i-2]}_{qrings[4*i]}"].values
+            dy_sum += df[f"diff_QuarterRings_{qrings[4*i-3]}_{qrings[4*i-1]}"].values
 
         # 1. Cálculo do Módulo (Magnitude)
         mod_name = f"vec_mod_layer_{layer}"
@@ -257,10 +268,10 @@ def vector_layers_components(df, layers):
         dx_sum_q4 = 0
 
         for i in range(1, len(rings)):
-            dy_sum_q1 += df[f"QuarterRings_{qrings[4*i-3]}"]
-            dx_sum_q2 += df[f"QuarterRings_{qrings[4*i-2]}"]
-            dy_sum_q3 += df[f"QuarterRings_{qrings[4*i-1]}"]
-            dx_sum_q4 += df[f"QuarterRings_{qrings[4*i]}"]
+            dy_sum_q1 += df[f"QuarterRings_{qrings[4*i-3]}"].values
+            dx_sum_q2 += df[f"QuarterRings_{qrings[4*i-2]}"].values
+            dy_sum_q3 += df[f"QuarterRings_{qrings[4*i-1]}"].values
+            dx_sum_q4 += df[f"QuarterRings_{qrings[4*i]}"].values
 
         new_cols[f"vec_Q1_layer_{layer}"] = dy_sum_q1
         new_cols[f"vec_Q2_layer_{layer}"] = dx_sum_q2
